@@ -199,6 +199,191 @@ function renderList(view) {
   return items.length ? items.map((item) => renderCard(item, collection, view)).join('') : `<div class="empty">暂无${escapeHtml(collectionLabel(collection))}</div>`;
 }
 
+function computeAlertData() {
+  const alerts = state.config.alerts || {};
+  const expiringDays = alerts.expiringDays || 30;
+  const lowStockThreshold = alerts.lowStockThreshold || 10;
+  const openStatuses = alerts.openRequestStatuses || ['待审批', '已审批', '已出库'];
+  const now = new Date();
+  const expiringCutoff = new Date(now.getTime() + expiringDays * 24 * 60 * 60 * 1000);
+
+  const batches = state.db.batches || [];
+  const requests = state.db.requests || [];
+
+  const expiringSoon = [];
+  const expiredNotWasted = [];
+  const lowStock = [];
+  const lockedWithOpenRequests = [];
+
+  const openRequestsByBatch = {};
+  requests.forEach((r) => {
+    if (openStatuses.includes(r.status)) {
+      if (!openRequestsByBatch[r.batchId]) openRequestsByBatch[r.batchId] = [];
+      openRequestsByBatch[r.batchId].push(r);
+    }
+  });
+
+  batches.forEach((batch) => {
+    const expireDate = batch.expiresAt ? new Date(batch.expiresAt) : null;
+    if (expireDate) {
+      if (expireDate < now && batch.status !== '已报废') {
+        expiredNotWasted.push({ ...batch, _daysLeft: -1, _openRequests: openRequestsByBatch[batch.id] || [] });
+      } else if (expireDate <= expiringCutoff && expireDate >= now && batch.status !== '已报废') {
+        const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+        expiringSoon.push({ ...batch, _daysLeft: daysLeft, _openRequests: openRequestsByBatch[batch.id] || [] });
+      }
+    }
+
+    const qty = Number(batch.quantity || 0);
+    if (qty < lowStockThreshold && batch.status !== '已报废') {
+      lowStock.push({ ...batch, _openRequests: openRequestsByBatch[batch.id] || [] });
+    }
+
+    if (batch.status === '锁定' && (openRequestsByBatch[batch.id] || []).length > 0) {
+      lockedWithOpenRequests.push({ ...batch, _openRequests: openRequestsByBatch[batch.id] || [] });
+    }
+  });
+
+  expiringSoon.sort((a, b) => a._daysLeft - b._daysLeft);
+
+  return { expiringSoon, expiredNotWasted, lowStock, lockedWithOpenRequests, openStatuses };
+}
+
+function renderAlertCard(batch, view, alertType, extraInfo = '') {
+  const title = view.titleFields.map((field) => batch[field]).filter(Boolean).join(' / ') || batch.id;
+  const statusValue = batch[view.statusField];
+  const details = (view.detailFields || []).map((field) => {
+    let value;
+    if (field.type === 'computed') {
+      value = computedFieldValue(field, batch);
+    } else if (field.type === 'relation') {
+      value = relationLabel(field, batch[field.name]);
+    } else {
+      value = batch[field.name];
+    }
+    const displayValue = value === null || value === undefined || value === '' ? '-' : value;
+    return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
+  }).join('');
+
+  const openRequests = batch._openRequests || [];
+  const requestBadge = openRequests.length > 0
+    ? `<span class="pill warn" style="margin-top:6px;">关联${openRequests.length}个未闭环申请</span>`
+    : '';
+
+  const extraBadge = extraInfo ? `<span class="pill bad" style="margin-top:6px;">${escapeHtml(extraInfo)}</span>` : '';
+
+  const actions = state.config.actions
+    .filter((action) => action.collection === 'batches')
+    .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${batch.id}">${escapeHtml(action.label)}</button>`)
+    .join('');
+
+  const viewRequestsBtn = openRequests.length > 0
+    ? `<button class="ghost" data-view-requests="${batch.id}">查看关联申请</button>`
+    : '';
+
+  return `<article class="card alert-card alert-${alertType}">
+    <div class="card-head">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <div class="alert-badges">
+          ${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}
+          ${extraBadge}
+          ${requestBadge}
+        </div>
+      </div>
+    </div>
+    ${details ? `<div class="detail">${details}</div>` : ''}
+    ${actions || viewRequestsBtn ? `<div class="actions">${actions}${viewRequestsBtn}</div>` : ''}
+  </article>`;
+}
+
+function renderRiskAlertsView(view) {
+  const alertData = computeAlertData();
+  const { expiringSoon, expiredNotWasted, lowStock, lockedWithOpenRequests } = alertData;
+  const totalCount = expiringSoon.length + expiredNotWasted.length + lowStock.length + lockedWithOpenRequests.length;
+
+  return `<section class="view" id="${view.id}">
+    <div class="alert-stats">
+      <div class="alert-stat alert-stat-expiring">
+        <span class="alert-stat-label">30天内过期</span>
+        <strong>${expiringSoon.length}</strong>
+      </div>
+      <div class="alert-stat alert-stat-expired">
+        <span class="alert-stat-label">已过期未报废</span>
+        <strong>${expiredNotWasted.length}</strong>
+      </div>
+      <div class="alert-stat alert-stat-lowstock">
+        <span class="alert-stat-label">库存低于阈值</span>
+        <strong>${lowStock.length}</strong>
+      </div>
+      <div class="alert-stat alert-stat-locked">
+        <span class="alert-stat-label">锁定待闭环</span>
+        <strong>${lockedWithOpenRequests.length}</strong>
+      </div>
+    </div>
+
+    <div class="alert-groups">
+      <div class="alert-group">
+        <div class="alert-group-header">
+          <h3><span class="alert-group-icon warn">⏰</span> 30天内过期</h3>
+          <span class="pill warn">${expiringSoon.length} 项</span>
+        </div>
+        <div class="alert-group-body">
+          ${expiringSoon.length
+            ? expiringSoon.map((b) => renderAlertCard(b, view, 'expiring', `还有${b._daysLeft}天过期`)).join('')
+            : '<div class="empty">暂无即将过期批次</div>'}
+        </div>
+      </div>
+
+      <div class="alert-group">
+        <div class="alert-group-header">
+          <h3><span class="alert-group-icon bad">⚠️</span> 已过期未报废</h3>
+          <span class="pill bad">${expiredNotWasted.length} 项</span>
+        </div>
+        <div class="alert-group-body">
+          ${expiredNotWasted.length
+            ? expiredNotWasted.map((b) => renderAlertCard(b, view, 'expired', '已过期')).join('')
+            : '<div class="empty">暂无已过期未报废批次</div>'}
+        </div>
+      </div>
+
+      <div class="alert-group">
+        <div class="alert-group-header">
+          <h3><span class="alert-group-icon warn">📦</span> 库存低于阈值</h3>
+          <span class="pill warn">${lowStock.length} 项</span>
+        </div>
+        <div class="alert-group-body">
+          ${lowStock.length
+            ? lowStock.map((b) => renderAlertCard(b, view, 'lowstock', `库存${b.quantity}${b.unit || ''}`)).join('')
+            : '<div class="empty">暂无低库存批次</div>'}
+        </div>
+      </div>
+
+      <div class="alert-group">
+        <div class="alert-group-header">
+          <h3><span class="alert-group-icon bad">🔒</span> 锁定且有未闭环申请</h3>
+          <span class="pill bad">${lockedWithOpenRequests.length} 项</span>
+        </div>
+        <div class="alert-group-body">
+          ${lockedWithOpenRequests.length
+            ? lockedWithOpenRequests.map((b) => renderAlertCard(b, view, 'locked', `关联${b._openRequests.length}个申请`)).join('')
+            : '<div class="empty">暂无锁定待闭环批次</div>'}
+        </div>
+      </div>
+    </div>
+
+    <div id="request-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>关联申请列表</h3>
+          <button class="ghost" id="close-modal">关闭</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function renderDashboardView(view) {
   const source = view.focus;
   let items = [...(state.db[source.collection] || [])];
@@ -464,6 +649,7 @@ function render() {
   document.title = state.config.title;
   $('#lede').textContent = state.config.lede;
   $('#main').innerHTML = state.config.views.map((view) => {
+    if (view.type === 'risk-alerts') return renderRiskAlertsView(view);
     if (view.type === 'dashboard') return renderDashboardView(view);
     if (view.type === 'stocktake') return renderStocktakeView(view);
     return renderCrudView(view);
@@ -484,12 +670,63 @@ async function load() {
   render();
 }
 
+function openRequestModal(batchId) {
+  const alertData = computeAlertData();
+  const batch = (state.db.batches || []).find((b) => b.id === batchId);
+  if (!batch) return;
+
+  const openStatuses = state.config.alerts?.openRequestStatuses || ['待审批', '已审批', '已出库'];
+  const requests = (state.db.requests || []).filter((r) => r.batchId === batchId && openStatuses.includes(r.status));
+
+  const batchName = [batch.name, batch.batchNo].filter(Boolean).join(' / ');
+
+  const requestsHtml = requests.length
+    ? requests.map((r) => {
+        const projectLabel = relationLabel({ collection: 'projects', labelFields: ['name', 'venue'] }, r.projectId);
+        return `<div class="modal-request-item">
+          <div class="modal-request-head">
+            <strong>${escapeHtml(r.showName || r.id)}</strong>
+            ${pill(r.status, toneFor(r.status))}
+          </div>
+          <div class="meta">地点：${escapeHtml(r.venue || '-')}</div>
+          <div class="meta">时段：${escapeHtml(r.useWindow || '-')}</div>
+          <div class="meta">数量：${r.quantity} ${escapeHtml(batch.unit || '')}　操作：${escapeHtml(r.operator || '-')}</div>
+          <div class="meta">项目：${escapeHtml(projectLabel)}</div>
+          ${r.memo ? `<div class="meta">备注：${escapeHtml(r.memo)}</div>` : ''}
+        </div>`;
+      }).join('')
+    : '<div class="empty">暂无关联申请</div>';
+
+  const modalBody = $('#modal-body');
+  const modal = $('#request-modal');
+  if (modalBody && modal) {
+    modalBody.innerHTML = `
+      <div class="modal-batch-info">
+        <h4>${escapeHtml(batchName)}</h4>
+        <div class="meta">共 ${requests.length} 个未闭环申请</div>
+      </div>
+      <div class="modal-requests">
+        ${requestsHtml}
+      </div>
+    `;
+    modal.classList.remove('hidden');
+  }
+}
+
+function closeRequestModal() {
+  const modal = $('#request-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 document.addEventListener('click', async (event) => {
   const tab = event.target.closest('.tab');
   const action = event.target.closest('[data-action]');
   const expandEl = event.target.closest('[data-expand-stocktake]');
   const saveBtn = event.target.closest('[data-stocktake-save]');
   const confirmBtn = event.target.closest('[data-stocktake-confirm]');
+  const viewRequestsBtn = event.target.closest('[data-view-requests]');
+  const closeModalBtn = event.target.closest('#close-modal');
+  const modal = event.target.closest('#request-modal');
 
   if (tab) setTab(tab.dataset.tab);
 
@@ -501,6 +738,14 @@ document.addEventListener('click', async (event) => {
     } catch (error) {
       toast(error.message);
     }
+  }
+
+  if (viewRequestsBtn) {
+    openRequestModal(viewRequestsBtn.dataset.viewRequests);
+  }
+
+  if (closeModalBtn || (modal && event.target === modal)) {
+    closeRequestModal();
   }
 
   if (expandEl && !event.target.closest('button') && !event.target.closest('input') && !event.target.closest('select')) {

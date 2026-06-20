@@ -94,11 +94,24 @@ app.post('/api/action/:actionId/:id', async (req, res) => {
   if (!action) return res.status(404).json({ error: 'unknown action' });
   const item = db[action.collection]?.find((entry) => entry.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'not found' });
+  const preCheck = preActionCheck(db, action, item);
+  if (preCheck.error) return res.status(409).json({ error: preCheck.error });
   const result = runAction(db, action, item);
   if (result.error) return res.status(409).json({ error: result.error });
   await writeDb(db);
   res.json(result.item);
 });
+
+function preActionCheck(db, action, item) {
+  const openStatuses = config.alerts?.openRequestStatuses || ['待审批', '已审批', '已出库'];
+  if (action.collection === 'batches') {
+    const openRequests = (db.requests || []).filter((r) => r.batchId === item.id && openStatuses.includes(r.status));
+    if (action.id === 'batch-waste' && openRequests.length > 0) {
+      return { error: `该批次存在 ${openRequests.length} 个未闭环申请，无法直接报废，请先处理申请` };
+    }
+  }
+  return {};
+}
 
 function getValue(source, pathName) {
   return pathName.split('.').reduce((value, key) => value?.[key], source);

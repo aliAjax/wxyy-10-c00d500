@@ -35,6 +35,11 @@ module.exports = {
     projects: { label: '演出项目' },
     stocktakes: { label: '库存盘点' }
   },
+  alerts: {
+    expiringDays: 30,
+    lowStockThreshold: 10,
+    openRequestStatuses: ['待审批', '已审批', '已出库']
+  },
   stats: [
     { label: '药剂批次', collection: 'batches' },
     { label: '可用批次', collection: 'batches', filter: { field: 'status', value: '可用' } },
@@ -50,6 +55,23 @@ module.exports = {
     { label: '录入中盘点', collection: 'stocktakes', filter: { field: 'status', value: '录入中' } }
   ],
   views: [
+    {
+      id: 'risk-alerts',
+      label: '风险预警中心',
+      type: 'risk-alerts',
+      collection: 'batches',
+      titleFields: ['name', 'batchNo'],
+      summaryFields: ['category'],
+      statusField: 'status',
+      detailFields: [
+        { label: '安全等级', name: 'safetyLevel' },
+        { label: '库存', name: 'quantity' },
+        { label: '有效期', name: 'expiresAt' },
+        { label: '供应商', name: 'supplierId', type: 'relation', collection: 'suppliers', labelFields: ['name'] },
+        { label: '存放区域', name: 'cabinetId', type: 'relation', collection: 'cabinets', labelFields: ['area'] },
+        { label: '柜位负责人', name: 'cabinetId', type: 'relation', collection: 'cabinets', labelFields: ['manager'] }
+      ]
+    },
     {
       id: 'dashboard',
       label: '库存看板',
