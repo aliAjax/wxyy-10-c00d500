@@ -46,14 +46,18 @@ function toast(message) {
 }
 
 async function api(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const incomingHeaders = options.headers || {};
+  const headers = {
+    'Content-Type': 'application/json',
+    ...incomingHeaders
+  };
   if (state.currentUser) {
     headers['x-current-user-id'] = state.currentUser.id;
   }
-  const res = await fetch(path, {
-    headers,
-    ...options
-  });
+  const fetchOpts = { ...options, headers };
+  delete fetchOpts.headers;
+  fetchOpts.headers = headers;
+  const res = await fetch(path, fetchOpts);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || '请求失败');
@@ -290,8 +294,8 @@ function renderCard(item, collection, view) {
 
 function renderList(view) {
   const collection = view.collection;
-  const query = $(`#search-${view.id}`)?.value.trim() || '';
-  const status = $(`#status-${view.id}`)?.value || '';
+  const query = state.filters[view.id]?.search?.trim() || '';
+  const status = state.filters[view.id]?.status || '';
   let items = [...(state.db[collection] || [])];
   if (query) {
     const relationFields = (view.fields || []).filter((f) => f.type === 'relation');
@@ -522,7 +526,7 @@ function renderCrudView(view) {
   const statusOptions = view.statusOptions || [];
   const canCreate = canCurrentUser('create', view.collection);
   const createForm = canCreate ? `
-    <form class="panel" data-create="${view.collection}" data-view="${view.id}">
+    <form class="panel" data-crud-form="${view.collection}" data-create="${view.collection}" data-view="${view.id}">
       <h2>${escapeHtml(view.formTitle)}</h2>
       <div class="form-grid">${view.fields.map(formField).join('')}</div>
       <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
@@ -539,10 +543,10 @@ function renderCrudView(view) {
       <div class="panel">
         <h2>${escapeHtml(view.listTitle)}</h2>
         <div class="toolbar">
-          <input id="search-${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}">
-          <select id="status-${view.id}">
+          <input data-search="${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}" value="${escapeHtml(state.filters[view.id]?.search || '')}">
+          <select data-status-filter="${view.id}">
             <option value="">全部状态</option>
-            ${statusOptions.map((option) => `<option>${escapeHtml(option)}</option>`).join('')}
+            ${statusOptions.map((option) => `<option${state.filters[view.id]?.status === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
           </select>
         </div>
         <div class="list" id="list-${view.id}">${renderList(view)}</div>
@@ -657,7 +661,7 @@ function renderStocktakeItemRows(stocktake) {
           <span class="unit">${escapeHtml(batch.unit || '')}</span>
         </td>
         <td class="num-cell">
-          <input type="number" class="st-input actual-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="actualQuantity" value="${actual}" ${inputAttrs} min="0">
+          <input type="number" class="st-input actual-input" data-stocktake-qty="${stocktake.id}" data-batch-id="${item.batchId}" data-st="${stocktake.id}" data-idx="${idx}" data-field="actualQuantity" value="${actual}" ${inputAttrs} min="0">
           <span class="unit">${escapeHtml(batch.unit || '')}</span>
         </td>
         <td class="num-cell">${diffHtml}</td>
@@ -725,8 +729,8 @@ function renderStocktakeCard(stocktake, view) {
 }
 
 function renderStocktakeList(view) {
-  const query = $(`#search-${view.id}`)?.value.trim() || '';
-  const status = $(`#status-${view.id}`)?.value || '';
+  const query = state.filters[view.id]?.search?.trim() || '';
+  const status = state.filters[view.id]?.status || '';
   let items = [...(state.db[view.collection] || [])];
   if (query) {
     items = items.filter((item) => view.searchFields.some((field) => String(item[field] || '').includes(query)));
@@ -741,7 +745,7 @@ function renderStocktakeView(view) {
   const statusOptions = view.statusOptions || [];
   const canCreate = canCurrentUser('create', 'stocktakes');
   const createForm = canCreate ? `
-    <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-stocktake-create>
+    <form class="panel" data-stocktake-form data-create="${view.collection}" data-view="${view.id}">
       <h2>${escapeHtml(view.formTitle)}</h2>
       <div class="form-grid">${view.fields.map(formField).join('')}</div>
       <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
@@ -758,10 +762,10 @@ function renderStocktakeView(view) {
       <div class="panel">
         <h2>${escapeHtml(view.listTitle)}</h2>
         <div class="toolbar">
-          <input id="search-${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}">
-          <select id="status-${view.id}">
+          <input data-search="${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}" value="${escapeHtml(state.filters[view.id]?.search || '')}">
+          <select data-status-filter="${view.id}">
             <option value="">全部状态</option>
-            ${statusOptions.map((option) => `<option>${escapeHtml(option)}</option>`).join('')}
+            ${statusOptions.map((option) => `<option${state.filters[view.id]?.status === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
           </select>
         </div>
         <div class="list" id="list-${view.id}">${renderStocktakeList(view)}</div>
@@ -808,14 +812,15 @@ function renderWasteCard(waste, view) {
       const actualQty = state.wasteEdits[waste.id]?.actualQuantity ?? waste.quantity;
       const disposalMethod = state.wasteEdits[waste.id]?.disposalMethod || waste.disposalMethod || '';
       const witness = state.wasteEdits[waste.id]?.witness || waste.witness || '';
+      const disposalNote = state.wasteEdits[waste.id]?.disposalNote || waste.disposalNote || '';
       const disabledAttr = canDispose ? '' : 'readonly disabled';
       actionButtons = `
         <div class="waste-dispose-form">
           <h4>确认处置</h4>
           <div class="form-grid">
-            <label>实际处置数量<input type="number" class="waste-input" data-waste="${waste.id}" data-field="actualQuantity" value="${actualQty}" min="0" max="${waste.quantity}" ${disabledAttr}><span class="unit">${escapeHtml(unit)}</span></label>
+            <label>实际处置数量<input type="number" class="waste-input" data-waste-actual="${waste.id}" data-waste="${waste.id}" data-field="actualQuantity" value="${actualQty}" min="0" max="${waste.quantity}" ${disabledAttr}><span class="unit">${escapeHtml(unit)}</span></label>
             <label>处置方式
-              <select class="waste-input" data-waste="${waste.id}" data-field="disposalMethod" ${canDispose ? '' : 'disabled'}>
+              <select class="waste-input" data-waste-method="${waste.id}" data-waste="${waste.id}" data-field="disposalMethod" ${canDispose ? '' : 'disabled'}>
                 <option value="">请选择</option>
                 <option value="专业机构回收" ${disposalMethod === '专业机构回收' ? 'selected' : ''}>专业机构回收</option>
                 <option value="化学中和销毁" ${disposalMethod === '化学中和销毁' ? 'selected' : ''}>化学中和销毁</option>
@@ -823,7 +828,8 @@ function renderWasteCard(waste, view) {
                 <option value="其他" ${disposalMethod === '其他' ? 'selected' : ''}>其他</option>
               </select>
             </label>
-            <label>见证人<input type="text" class="waste-input" data-waste="${waste.id}" data-field="witness" value="${escapeHtml(witness)}" ${disabledAttr}></label>
+            <label>见证人<input type="text" class="waste-input" data-waste-witness="${waste.id}" data-waste="${waste.id}" data-field="witness" value="${escapeHtml(witness)}" ${disabledAttr}></label>
+            <label class="wide">处置备注<input type="text" class="waste-input" data-waste-note="${waste.id}" data-waste="${waste.id}" data-field="disposalNote" value="${escapeHtml(disposalNote)}" ${disabledAttr} placeholder="记录处置过程中的特殊情况..."></label>
           </div>
           <div class="waste-actions">
             ${canDispose ? `<button class="danger" data-waste-dispose="${waste.id}">确认处置并扣减库存</button>` : `<span class="no-permission-tip-inline">⚠️ 当前角色无报废处置权限</span>`}
@@ -876,8 +882,8 @@ function renderWasteCard(waste, view) {
 }
 
 function renderWasteList(view) {
-  const query = $(`#search-${view.id}`)?.value.trim() || '';
-  const status = $(`#status-${view.id}`)?.value || '';
+  const query = state.filters[view.id]?.search?.trim() || '';
+  const status = state.filters[view.id]?.status || '';
   let items = [...(state.db[view.collection] || [])];
   if (query) {
     items = items.filter((item) => view.searchFields.some((field) => {
@@ -900,7 +906,7 @@ function renderWasteView(view) {
   const statusOptions = view.statusOptions || [];
   const canCreate = canCurrentUser('create', 'wastes');
   const createForm = canCreate ? `
-    <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-waste-create>
+    <form class="panel" data-waste-form data-create="${view.collection}" data-view="${view.id}">
       <h2>${escapeHtml(view.formTitle)}</h2>
       <div class="form-grid">${view.fields.map(formField).join('')}</div>
       <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
@@ -917,10 +923,10 @@ function renderWasteView(view) {
       <div class="panel">
         <h2>${escapeHtml(view.listTitle)}</h2>
         <div class="toolbar">
-          <input id="search-${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}">
-          <select id="status-${view.id}">
+          <input data-search="${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}" value="${escapeHtml(state.filters[view.id]?.search || '')}">
+          <select data-status-filter="${view.id}">
             <option value="">全部状态</option>
-            ${statusOptions.map((option) => `<option>${escapeHtml(option)}</option>`).join('')}
+            ${statusOptions.map((option) => `<option${state.filters[view.id]?.status === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
           </select>
         </div>
         <div class="list" id="list-${view.id}">${renderWasteList(view)}</div>
@@ -981,9 +987,9 @@ function renderAuditLogCard(log) {
 }
 
 function renderAuditLogsList(view) {
-  const actionType = document.getElementById(`action-type-${view.id}`)?.value || '';
-  const targetColl = document.getElementById(`target-collection-${view.id}`)?.value || '';
-  const keyword = document.getElementById(`search-${view.id}`)?.value.trim() || '';
+  const actionType = state.filters[view.id]?.actionType || '';
+  const targetColl = state.filters[view.id]?.targetCollection || '';
+  const keyword = state.filters[view.id]?.search?.trim() || '';
 
   let items = [...(state.db.auditLogs || [])];
 
@@ -1019,21 +1025,22 @@ function refreshAuditLogsList(viewId) {
 function renderAuditLogsView(view) {
   const actionTypes = state.config.auditLog?.actionTypes || [];
   const targetCollections = state.config.auditLog?.targetCollections || [];
+  const f = state.filters[view.id] || {};
 
   return `<section class="view" id="${view.id}">
     <div class="panel">
       <h2>操作审计日志</h2>
       <p class="meta">所有关键操作均会自动记录，日志只读不可修改。</p>
       <div class="audit-toolbar">
-        <select id="action-type-${view.id}">
+        <select data-audit-action="${view.id}">
           <option value="">全部操作类型</option>
-          ${actionTypes.map((type) => `<option>${escapeHtml(type)}</option>`).join('')}
+          ${actionTypes.map((type) => `<option${f.actionType === type ? ' selected' : ''}>${escapeHtml(type)}</option>`).join('')}
         </select>
-        <select id="target-collection-${view.id}">
+        <select data-audit-collection="${view.id}">
           <option value="">全部目标集合</option>
-          ${targetCollections.map((coll) => `<option value="${coll}">${escapeHtml(collectionLabel(coll))}</option>`).join('')}
+          ${targetCollections.map((coll) => `<option value="${coll}"${f.targetCollection === coll ? ' selected' : ''}>${escapeHtml(collectionLabel(coll))}</option>`).join('')}
         </select>
-        <input id="search-${view.id}" placeholder="搜索关键词（标题、备注、操作人等）">
+        <input data-search="${view.id}" placeholder="搜索关键词（标题、备注、操作人等）" value="${escapeHtml(f.search || '')}">
       </div>
       <div class="list" id="list-${view.id}">${renderAuditLogsList(view)}</div>
     </div>
@@ -1221,7 +1228,12 @@ function render() {
   }
   for (const view of state.config.views) {
     if (!state.filters[view.id]) {
-      state.filters[view.id] = { search: '', status: '' };
+      state.filters[view.id] = { search: '', status: '', actionType: '', targetCollection: '' };
+    } else {
+      if (state.filters[view.id].search === undefined) state.filters[view.id].search = '';
+      if (state.filters[view.id].status === undefined) state.filters[view.id].status = '';
+      if (state.filters[view.id].actionType === undefined) state.filters[view.id].actionType = '';
+      if (state.filters[view.id].targetCollection === undefined) state.filters[view.id].targetCollection = '';
     }
   }
   renderTabs();
@@ -1432,6 +1444,22 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  const expandStocktake = e.target.closest('[data-expand-stocktake]');
+  if (expandStocktake) {
+    const id = expandStocktake.dataset.expandStocktake;
+    state.expandedStocktake = state.expandedStocktake === id ? null : id;
+    render();
+    return;
+  }
+
+  const expandWaste = e.target.closest('[data-expand-waste]');
+  if (expandWaste) {
+    const id = expandWaste.dataset.expandWaste;
+    state.expandedWaste = state.expandedWaste === id ? null : id;
+    render();
+    return;
+  }
+
   const closeModal = e.target.closest('[data-close-modal]');
   if (closeModal) {
     state.activeModal = null;
@@ -1527,7 +1555,7 @@ document.addEventListener('click', async (e) => {
       }
     const results = [];
     for (const row of state.importPreview) {
-      const ok = await api('/batches', { method: 'POST', body: JSON.stringify(row) });
+      const ok = await api('/api/batches', { method: 'POST', body: JSON.stringify(row) });
       results.push(ok);
     }
     toast(`成功导入 ${results.filter(r => r).length} 条`);
@@ -1541,7 +1569,7 @@ document.addEventListener('click', async (e) => {
   if (stocktakeSave) {
     const id = stocktakeSave.dataset.stocktakeSave;
     const items = collectStocktakeItems(id);
-    await api(`/stocktakes/${id}/items`, {
+    await api(`/api/stocktakes/${id}/items`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items })
@@ -1554,7 +1582,7 @@ document.addEventListener('click', async (e) => {
   const stocktakeConfirm = e.target.closest('[data-stocktake-confirm]');
   if (stocktakeConfirm) {
     const id = stocktakeConfirm.dataset.stocktakeConfirm;
-    await api(`/stocktakes/${id}/confirm`, { method: 'POST' });
+    await api(`/api/stocktakes/${id}/confirm`, { method: 'POST' });
     await loadDb();
     render();
     return;
@@ -1563,7 +1591,7 @@ document.addEventListener('click', async (e) => {
   const wasteApprove = e.target.closest('[data-waste-approve]');
   if (wasteApprove) {
     const id = wasteApprove.dataset.wasteApprove;
-    await api(`/wastes/${id}/approve`, { method: 'POST' });
+    await api(`/api/wastes/${id}/approve`, { method: 'POST' });
     await loadDb();
     render();
     return;
@@ -1573,7 +1601,7 @@ document.addEventListener('click', async (e) => {
   if (wasteDispose) {
     const id = wasteDispose.dataset.wasteDispose;
     const payload = collectWasteDisposalData(id);
-    await api(`/wastes/${id}/dispose`, {
+    await api(`/api/wastes/${id}/dispose`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1592,7 +1620,7 @@ document.addEventListener('click', async (e) => {
       return;
     }
     try {
-      await api(`/action/${actionId}/${id}`, { method: 'POST' });
+      await api(`/api/action/${actionId}/${id}`, { method: 'POST' });
       await loadDb();
       state.expandedItems[viewId] = id;
       render();
@@ -1616,7 +1644,7 @@ document.addEventListener('click', async (e) => {
     const label = deleteBtn.dataset.label || '该记录';
     if (!confirm(`确定删除${label}吗？此操作不可恢复。`)) return;
     const collection = deleteBtn.dataset.collection;
-    await api(`/${collection}/${id}`, { method: 'DELETE' });
+    await api(`/api/${collection}/${id}`, { method: 'DELETE' });
     state.expandedItems[viewId] = null;
     await loadDb();
     render();
@@ -1690,6 +1718,32 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+  const statusFilter = e.target.closest('[data-status-filter]');
+  if (statusFilter) {
+    const viewId = statusFilter.dataset.statusFilter;
+    state.filters[viewId].status = statusFilter.value;
+    render();
+    return;
+  }
+
+  const auditAction = e.target.closest('[data-audit-action]');
+  if (auditAction) {
+    const viewId = auditAction.dataset.auditAction;
+    state.filters[viewId] = state.filters[viewId] || { search: '', status: '', actionType: '', targetCollection: '' };
+    state.filters[viewId].actionType = auditAction.value;
+    render();
+    return;
+  }
+
+  const auditCollection = e.target.closest('[data-audit-collection]');
+  if (auditCollection) {
+    const viewId = auditCollection.dataset.auditCollection;
+    state.filters[viewId] = state.filters[viewId] || { search: '', status: '', actionType: '', targetCollection: '' };
+    state.filters[viewId].targetCollection = auditCollection.value;
+    render();
+    return;
+  }
+
   const autoFill = e.target.closest('[data-auto-fill]');
   if (autoFill) {
     const viewCfg = state.config.views.find(v => v.id === state.activeView);
@@ -1719,7 +1773,7 @@ document.addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = collectFormData(stocktakeForm);
     data.status = '录入中';
-    await api('/stocktakes', {
+    await api('/api/stocktakes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -1734,7 +1788,7 @@ document.addEventListener('submit', async (e) => {
   if (wasteForm) {
     e.preventDefault();
     const data = collectFormData(wasteForm);
-    await api('/wastes', {
+    await api('/api/wastes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -1752,13 +1806,13 @@ document.addEventListener('submit', async (e) => {
     const editId = crudForm.dataset.editId;
     const data = collectFormData(crudForm);
     if (editId) {
-      await api(`/${collection}/${editId}`, {
+      await api(`/api/${collection}/${editId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
     } else {
-      await api(`/${collection}`, {
+      await api(`/api/${collection}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

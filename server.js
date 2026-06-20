@@ -430,6 +430,7 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
   const operator = req.currentUser;
   const now = new Date().toISOString();
   const confirmedBy = `${operator.name}（${operator.roleLabel}）`;
+  const confirmedByInfo = { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel };
 
   let surplusCount = 0;
   let deficitCount = 0;
@@ -476,6 +477,7 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
   stocktake.status = '已确认';
   stocktake.confirmedAt = now;
   stocktake.confirmedBy = confirmedBy;
+  stocktake.confirmedByInfo = confirmedByInfo;
   stocktake.updatedAt = now;
   stocktake.history = stocktake.history || [];
 
