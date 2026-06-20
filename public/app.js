@@ -233,12 +233,32 @@ function renderCrudView(view) {
   </section>`;
 }
 
+function applyAutoFill(select) {
+  const form = select.closest('form');
+  if (!form) return;
+  const autoFillConfig = JSON.parse(select.dataset.autoFill);
+  const collection = select.dataset.collection;
+  const selectedId = select.value;
+  const selectedItem = state.db[collection]?.find((item) => item.id === selectedId);
+  autoFillConfig.forEach((mapping) => {
+    const targetField = form.querySelector(`[name="${mapping.to}"]`);
+    if (targetField) {
+      targetField.value = selectedItem?.[mapping.from] || '';
+    }
+  });
+}
+
+function initializeAutoFillFields() {
+  $$('select[data-auto-fill]').forEach(applyAutoFill);
+}
+
 function render() {
   $('#title').textContent = state.config.title;
   document.title = state.config.title;
   $('#lede').textContent = state.config.lede;
   $('#main').innerHTML = state.config.views.map((view) => view.type === 'dashboard' ? renderDashboardView(view) : renderCrudView(view)).join('');
   setTab(state.activeTab || state.config.views[0].id);
+  initializeAutoFillFields();
 }
 
 async function load() {
@@ -269,19 +289,7 @@ document.addEventListener('input', (event) => {
 document.addEventListener('change', (event) => {
   const select = event.target.closest('select[data-auto-fill]');
   if (!select) return;
-  const form = select.closest('form');
-  if (!form) return;
-  const autoFillConfig = JSON.parse(select.dataset.autoFill);
-  const collection = select.dataset.collection;
-  const selectedId = select.value;
-  const selectedItem = state.db[collection]?.find((item) => item.id === selectedId);
-  if (!selectedItem) return;
-  autoFillConfig.forEach((mapping) => {
-    const targetField = form.querySelector(`[name="${mapping.to}"]`);
-    if (targetField) {
-      targetField.value = selectedItem[mapping.from] || '';
-    }
-  });
+  applyAutoFill(select);
 });
 
 document.addEventListener('submit', async (event) => {
