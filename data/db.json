@@ -1,0 +1,42 @@
+{
+  "batches": [
+    {
+      "id": "batch-seed-1",
+      "name": "冷焰火粉A17",
+      "category": "冷焰火",
+      "batchNo": "PY-A17-2605",
+      "cabinet": "防爆柜B-2",
+      "safetyLevel": "高",
+      "quantity": 18,
+      "unit": "罐",
+      "expiresAt": "2026-10-30",
+      "status": "可用",
+      "createdAt": "2026-06-16T09:00:00.000Z",
+      "updatedAt": "2026-06-16T09:00:00.000Z",
+      "history": [
+        { "at": "2026-06-16T09:00:00.000Z", "action": "创建", "note": "入库18罐" }
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "id": "request-seed-1",
+      "batchId": "batch-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-11 19:30-19:45",
+      "operator": "许川",
+      "quantity": 4,
+      "safetyLevel": "高",
+      "status": "待审批",
+      "memo": "仅用于舞台前沿两侧喷点",
+      "returned": 0,
+      "wasted": 0,
+      "createdAt": "2026-06-18T12:00:00.000Z",
+      "updatedAt": "2026-06-18T12:00:00.000Z",
+      "history": [
+        { "at": "2026-06-18T12:00:00.000Z", "action": "创建", "note": "提交演出领用申请" }
+      ]
+    }
+  ]
+}
