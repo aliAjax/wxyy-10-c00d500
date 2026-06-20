@@ -660,6 +660,62 @@
       "disposedBy": "测试"
     }
   ],
+  "schedules": [
+    {
+      "id": "schedules-seed-1",
+      "code": "DD-2026-001",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-11 19:30-19:50",
+      "operator": "许川",
+      "note": "开幕式全流程用药调度",
+      "status": "调度待审批",
+      "totalQuantity": 10,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "舞台前沿左侧",
+          "safetyLevel": "高",
+          "quantity": 4,
+          "returned": 0,
+          "wasted": 0
+        },
+        {
+          "batchId": "batch-seed-5",
+          "sprayPoint": "观众区中央",
+          "safetyLevel": "中",
+          "quantity": 6,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T10:30:00.000Z",
+      "updatedAt": "2026-06-20T10:30:00.000Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T10:30:00.000Z",
+          "action": "调度创建",
+          "note": "调度单：DD-2026-001，演出：海港音乐节开场，共2条明细，合计10单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ]
+    }
+  ],
   "auditLogs": [
     {
       "id": "auditLogs-1781960094304-2d367",

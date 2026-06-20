@@ -16,6 +16,7 @@ module.exports = {
     create: {
       batches: ['librarian'],
       requests: ['show'],
+      schedules: ['show'],
       wastes: ['librarian', 'show'],
       stocktakes: ['librarian'],
       suppliers: ['librarian'],
@@ -25,6 +26,7 @@ module.exports = {
     update: {
       batches: ['librarian', 'safety'],
       requests: ['show', 'safety'],
+      schedules: ['show', 'safety', 'librarian'],
       wastes: ['librarian', 'safety'],
       stocktakes: ['librarian'],
       suppliers: ['librarian'],
@@ -34,6 +36,7 @@ module.exports = {
     delete: {
       batches: ['librarian'],
       requests: ['show', 'safety'],
+      schedules: ['show', 'safety'],
       wastes: ['librarian', 'safety'],
       stocktakes: ['librarian'],
       suppliers: ['librarian'],
@@ -48,6 +51,7 @@ module.exports = {
       'request-reject': ['safety'],
       'request-issue': ['librarian'],
       'request-return': ['librarian'],
+      'schedule-reject': ['safety'],
       'supplier-active': ['librarian'],
       'supplier-pause': ['librarian'],
       'supplier-expired': ['librarian'],
@@ -66,7 +70,10 @@ module.exports = {
       'wastes-dispose': ['librarian'],
       'stocktakes-items': ['librarian'],
       'stocktakes-confirm': ['librarian', 'safety'],
-      'batches-import': ['librarian']
+      'batches-import': ['librarian'],
+      'schedules-approve': ['safety'],
+      'schedules-issue': ['librarian'],
+      'schedules-return': ['librarian']
     }
   },
   tones: {
@@ -94,11 +101,17 @@ module.exports = {
     '已完成': 'ok',
     '已取消': 'bad',
     '已处置': 'ok',
-    '待处置': 'warn'
+    '待处置': 'warn',
+    '调度待审批': 'warn',
+    '调度已审批': 'warn',
+    '调度已出库': 'warn',
+    '调度已回库': 'ok',
+    '调度已驳回': 'bad'
   },
   collections: {
     batches: { label: '药剂批次' },
     requests: { label: '领用申请' },
+    schedules: { label: '用药调度' },
     suppliers: { label: '供应商档案' },
     cabinets: { label: '柜位台账' },
     projects: { label: '演出项目' },
@@ -114,8 +127,10 @@ module.exports = {
   stats: [
     { label: '药剂批次', collection: 'batches' },
     { label: '可用批次', collection: 'batches', filter: { field: 'status', value: '可用' } },
-    { label: '待审批', collection: 'requests', filter: { field: 'status', value: '待审批' } },
-    { label: '已出库', collection: 'requests', filter: { field: 'status', value: '已出库' } },
+    { label: '领用待审批', collection: 'requests', filter: { field: 'status', value: '待审批' } },
+    { label: '领用已出库', collection: 'requests', filter: { field: 'status', value: '已出库' } },
+    { label: '调度待审批', collection: 'schedules', filter: { field: 'status', value: '调度待审批' } },
+    { label: '调度已出库', collection: 'schedules', filter: { field: 'status', value: '调度已出库' } },
     { label: '防爆柜', collection: 'cabinets' },
     { label: '空闲柜位', collection: 'cabinets', filter: { field: 'status', value: '空闲' } },
     { label: '供应商', collection: 'suppliers' },
@@ -247,6 +262,45 @@ module.exports = {
         { label: '申请数量', name: 'quantity', type: 'number', required: true },
         { label: '所需安全等级', name: 'safetyLevel', type: 'select', options: ['低', '中', '高'] },
         { label: '安全备注', name: 'memo', type: 'textarea', wide: true }
+      ]
+    },
+    {
+      id: 'schedule-board',
+      label: '调度看板',
+      type: 'schedule-board',
+      collection: 'schedules',
+      focusTitle: '调度单流转跟踪',
+      focus: { collection: 'schedules', field: 'status', values: ['调度待审批', '调度已审批', '调度已出库'], limit: 10 }
+    },
+    {
+      id: 'schedules',
+      label: '用药调度',
+      type: 'schedule',
+      collection: 'schedules',
+      formTitle: '新建用药调度单',
+      listTitle: '调度单列表',
+      submitLabel: '提交调度单',
+      searchPlaceholder: '搜索调度单号、演出名称、地点',
+      searchFields: ['code', 'projectId', 'venue', 'operator', 'note'],
+      statusField: 'status',
+      statusOptions: ['调度待审批', '调度已审批', '调度已出库', '调度已回库', '调度已驳回'],
+      titleFields: ['code'],
+      summaryFields: ['operator', 'note'],
+      detailFields: [
+        { label: '演出项目', name: 'projectId', type: 'relation', collection: 'projects', labelFields: ['name', 'venue'] },
+        { label: '演出日期', name: 'projectId', type: 'relation', collection: 'projects', labelFields: ['showDate'] },
+        { label: '明细条数', name: 'itemCount', type: 'computed', compute: 'countItems' },
+        { label: '申请总数量', name: 'totalQuantity', type: 'computed', compute: 'sumItems' },
+        { label: '出库时间', name: 'issuedAt' },
+        { label: '回库时间', name: 'returnedAt' },
+        { label: '审批人', name: 'approver' }
+      ],
+      fields: [
+        { label: '调度单号', name: 'code', required: true },
+        { label: '演出项目', name: 'projectId', type: 'relation', collection: 'projects', labelFields: ['name', 'venue', 'showDate'], required: true, wide: true },
+        { label: '使用时段', name: 'useWindow', required: true },
+        { label: '操作人员', name: 'operator', required: true },
+        { label: '调度备注', name: 'note', type: 'textarea', wide: true }
       ]
     },
     {
@@ -410,10 +464,11 @@ module.exports = {
     { id: 'project-ongoing', label: '进行中', collection: 'projects', patches: [{ field: 'status', value: '进行中' }] },
     { id: 'project-complete', label: '已完成', collection: 'projects', patches: [{ field: 'status', value: '已完成' }] },
     { id: 'project-cancel', label: '取消', collection: 'projects', danger: true, patches: [{ field: 'status', value: '已取消' }] },
-    { id: 'waste-reject', label: '驳回', collection: 'wastes', danger: true, patches: [{ field: 'status', value: '已驳回' }] }
+    { id: 'waste-reject', label: '驳回', collection: 'wastes', danger: true, patches: [{ field: 'status', value: '已驳回' }] },
+    { id: 'schedule-reject', label: '驳回', collection: 'schedules', danger: true, patches: [{ field: 'status', value: '调度已驳回' }] }
   ],
   auditLog: {
-    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消'],
-    targetCollections: ['batches', 'requests', 'wastes', 'stocktakes', 'suppliers', 'cabinets', 'projects']
+    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消', '调度创建', '调度审批通过', '调度驳回', '调度出库', '调度出库(关联)', '调度回库', '调度回库(关联)'],
+    targetCollections: ['batches', 'requests', 'schedules', 'wastes', 'stocktakes', 'suppliers', 'cabinets', 'projects']
   }
 };

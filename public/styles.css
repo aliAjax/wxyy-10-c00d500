@@ -1432,6 +1432,97 @@ button:disabled.no-perm-disabled {
   position: relative;
 }
 
+.schedule-items-table,
+.stocktake-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.schedule-items-table th,
+.stocktake-table th,
+.schedule-items-table td,
+.stocktake-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.schedule-items-table th,
+.stocktake-table th {
+  background: var(--panel-2);
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.schedule-items-table tr:last-child td,
+.stocktake-table tr:last-child td {
+  border-bottom: none;
+}
+
+.schedule-items-table td.num-cell,
+.stocktake-table td.num-cell {
+  white-space: nowrap;
+}
+
+.schedule-items-table td.num-cell input,
+.stocktake-table td.num-cell input {
+  display: inline-block;
+  width: 84px;
+  padding: 6px 8px;
+}
+
+.schedule-form-row select,
+.schedule-form-row input[type="text"],
+.schedule-form-row input[type="number"] {
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.no-permission-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.schedule-card .schedule-detail {
+  padding: 12px 16px 16px;
+  border-top: 1px dashed var(--line);
+  margin-top: 4px;
+}
+
+.schedule-card .detail {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.compat-entry {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(17, 97, 92, .06);
+  border: 1px solid rgba(17, 97, 92, .2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.compat-entry strong {
+  color: var(--accent);
+}
+
 @media (max-width: 620px) {
   .user-chip {
     padding: 6px 10px;
@@ -1456,5 +1547,17 @@ button:disabled.no-perm-disabled {
 
   .no-permission-panel {
     padding: 28px 18px;
+  }
+
+  .schedule-items-table,
+  .stocktake-table {
+    font-size: 12px;
+  }
+
+  .schedule-items-table th,
+  .stocktake-table th,
+  .schedule-items-table td,
+  .stocktake-table td {
+    padding: 6px;
   }
 }

@@ -18,7 +18,11 @@ const state = {
   expandedItems: {},
   activeModal: null,
   stocktakeInputs: {},
-  wasteDisposalInputs: {}
+  wasteDisposalInputs: {},
+  expandedSchedule: null,
+  scheduleEdits: {},
+  scheduleReturnInputs: {},
+  scheduleFormRows: [{}]
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -1175,6 +1179,301 @@ function renderBatchImportView(view) {
   </section>`;
 }
 
+function renderScheduleFormRows() {
+  const rows = state.scheduleFormRows || [{}];
+  const batches = (state.db.batches || []).filter(b => b.status === '可用');
+  return rows.map((row, idx) => {
+    const selectedBatch = batches.find(b => b.id === row.batchId);
+    const maxQty = selectedBatch ? selectedBatch.quantity : 0;
+    const unit = selectedBatch ? selectedBatch.unit : '';
+    const canRemove = rows.length > 1;
+    return `<tr class="schedule-form-row">
+      <td>
+        <select data-sched-row="${idx}" data-sched-field="batchId">
+          <option value="">请选择批次</option>
+          ${batches.map(b => `<option value="${b.id}" ${row.batchId === b.id ? 'selected' : ''}>${escapeHtml(b.name + ' / ' + b.batchNo + '（库存：' + b.quantity + b.unit + ' / 等级：' + b.safetyLevel + '）')}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="text" data-sched-row="${idx}" data-sched-field="sprayPoint" placeholder="如：舞台左侧" value="${escapeHtml(row.sprayPoint || '')}">
+      </td>
+      <td>
+        <select data-sched-row="${idx}" data-sched-field="safetyLevel">
+          <option value="低" ${row.safetyLevel === '低' ? 'selected' : ''}>低</option>
+          <option value="中" ${row.safetyLevel === '中' ? 'selected' : ''}>中</option>
+          <option value="高" ${row.safetyLevel === '高' ? 'selected' : ''}>高</option>
+        </select>
+      </td>
+      <td class="num-cell">
+        <input type="number" min="1" max="${maxQty || ''}" data-sched-row="${idx}" data-sched-field="quantity" value="${row.quantity || ''}" placeholder="数量">
+        <span class="unit">${escapeHtml(unit)}</span>
+      </td>
+      <td>
+        ${canRemove ? `<button type="button" class="danger" data-sched-remove-row="${idx}">删除</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function collectScheduleFormData() {
+  const form = document.querySelector('[data-schedule-form]');
+  if (!form) return {};
+  const data = {};
+  const fd = new FormData(form);
+  for (const [k, v] of fd.entries()) {
+    if (v === '' || v === null || v === undefined) continue;
+    if (!isNaN(Number(v)) && v !== '' && typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
+      data[k] = Number(v);
+    } else {
+      data[k] = v;
+    }
+  }
+  const rows = state.scheduleFormRows || [{}];
+  data.items = rows.map(r => ({
+    batchId: r.batchId || '',
+    sprayPoint: r.sprayPoint || '',
+    safetyLevel: r.safetyLevel || '低',
+    quantity: Number(r.quantity || 0)
+  }));
+  return data;
+}
+
+function renderScheduleBoardView(view) {
+  const source = view.focus;
+  let items = [...(state.db[source.collection] || [])];
+  if (source.field) items = items.filter(item => source.values.includes(item[source.field]));
+  items = items.slice(0, source.limit || 10);
+  const pending = (state.db.schedules || []).filter(s => s.status === '调度待审批').length;
+  const approved = (state.db.schedules || []).filter(s => s.status === '调度已审批').length;
+  const issued = (state.db.schedules || []).filter(s => s.status === '调度已出库').length;
+  const done = (state.db.schedules || []).filter(s => s.status === '调度已回库').length;
+  const boardStats = `
+    <div class="stats">
+      <div class="stat"><span>调度待审批</span><strong>${pending}</strong></div>
+      <div class="stat"><span>调度已审批</span><strong>${approved}</strong></div>
+      <div class="stat"><span>调度已出库</span><strong>${issued}</strong></div>
+      <div class="stat"><span>调度已回库</span><strong>${done}</strong></div>
+    </div>
+  `;
+  const schedCards = items.length ? items.map(item => {
+    const viewCfg = state.config.views.find(v => v.id === 'schedules');
+    return renderScheduleCard(item, viewCfg || {});
+  }).join('') : '<div class="empty">暂无流转中的调度单</div>';
+  const jumpBtn = `<div style="margin:12px 0;"><button class="secondary" data-jump-schedules>进入用药调度 →</button></div>`;
+  return `<section class="view" id="${view.id}">
+    ${renderStats()}
+    ${boardStats}
+    <div class="panel"><h2>${escapeHtml(view.focusTitle)}</h2>${jumpBtn}<div class="list">${schedCards}</div></div>
+  </section>`;
+}
+
+function renderScheduleCard(schedule, view) {
+  const isExpanded = state.expandedSchedule === schedule.id;
+  const title = [schedule.code, schedule.showName].filter(Boolean).join(' / ') || schedule.id;
+  const statusValue = schedule[view.statusField];
+  const summary = (view.summaryFields || []).map(f => schedule[f]).filter(Boolean).join(' · ');
+  const projectLabel = relationLabel({ collection: 'projects', labelFields: ['name', 'venue'] }, schedule.projectId);
+  const itemsCount = (schedule.items || []);
+  const totalQty = itemsCount.reduce((s, it) => s + (it.quantity || 0), 0);
+  const canApprove = schedule.status === '调度待审批' && canCurrentUser('special', 'schedules-approve');
+  const canReject = schedule.status === '调度待审批' && canCurrentUser('action', 'schedule-reject');
+  const canIssue = schedule.status === '调度已审批' && canCurrentUser('special', 'schedules-issue');
+  const canReturn = schedule.status === '调度已出库' && canCurrentUser('special', 'schedules-return');
+  const canDelete = ['调度待审批', '调度已驳回'].includes(schedule.status) && canCurrentUser('delete', 'schedules');
+  let expandContent = '';
+  if (isExpanded) {
+    const detailRows = (view.detailFields || []).map(field => {
+      let value;
+      if (field.type === 'computed') {
+        if (field.compute === 'countItems') value = itemsCount.length;
+        else if (field.compute === 'sumItems') value = totalQty;
+        else value = '-';
+      } else if (field.type === 'relation') {
+        value = relationLabel(field, schedule[field.name]);
+      } else {
+        value = schedule[field.name];
+      }
+      const displayValue = value === null || value === undefined || value === '' ? '-' : value;
+      return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
+    }).join('');
+    const itemsTable = `
+      <table class="schedule-items-table">
+        <thead>
+          <tr><th>药剂批次</th><th>喷点</th><th>安全等级</th><th>出库数量</th><th>已回库</th><th>已报废</th></tr>
+        </thead>
+        <tbody>
+          ${itemsCount.map(it => {
+            const batch = state.db.batches?.find(b => b.id === it.batchId);
+            const batchLabel = batch ? `${batch.name} / ${batch.batchNo}` : it.batchId;
+            const unit = batch?.unit || '';
+            const toneCls = '';
+            let returnInput = '';
+            if (schedule.status === '调度已出库' && canReturn) {
+              const rinputs = state.scheduleReturnInputs?.[schedule.id] || {};
+              const returned = rinputs[it.batchId]?.returned ?? it.returned ?? 0;
+              const wasted = rinputs[it.batchId]?.wasted ?? it.wasted ?? 0;
+              returnInput = `<td class="num-cell"><input type="number" min="0" max="${it.quantity}" data-sched-return-row data-sched-return="${schedule.id}" data-sched-batch="${it.batchId}" data-sched-return-field="returned" value="${returned}" placeholder="回库"><span class="unit">${escapeHtml(unit)}</span></td>
+              <td class="num-cell"><input type="number" min="0" max="${it.quantity}" data-sched-return-row data-sched-return="${schedule.id}" data-sched-batch="${it.batchId}" data-sched-return-field="wasted" value="${wasted}" placeholder="报废"><span class="unit">${escapeHtml(unit)}</span></td>`;
+            } else {
+              returnInput = `<td class="num-cell">${it.returned || 0} ${escapeHtml(unit)}</td><td class="num-cell">${it.wasted || 0} ${escapeHtml(unit)}</td>`;
+            }
+            return `<tr>
+              <td><div><strong>${escapeHtml(batchLabel)}</strong></div><div class="meta">喷点：${escapeHtml(it.sprayPoint || '-')}</div></td>
+              <td>${escapeHtml(it.sprayPoint || '-')}</td>
+              <td>${pill(it.safetyLevel, toneFor(it.safetyLevel))}</td>
+              <td class="num-cell">${it.quantity || 0} ${escapeHtml(unit)}</td>
+              ${returnInput}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+    let actionButtons = '';
+    if (schedule.status === '调度待审批') {
+      actionButtons = `<div class="schedule-actions">
+        ${canApprove ? `<button class="secondary" data-sched-approve="${schedule.id}">审批通过</button>` : ''}
+        ${canReject ? `<button class="danger" data-action="schedule-reject" data-id="${schedule.id}">驳回</button>` : ''}
+        ${!canApprove && !canReject ? '<span class="no-permission-tip-inline">⚠️ 当前角色无调度审批权限</span>' : ''}
+      </div>`;
+    } else if (schedule.status === '调度已审批') {
+      actionButtons = `<div class="schedule-actions">
+        ${canIssue ? `<button class="secondary" data-sched-issue="${schedule.id}">确认出库（批量扣减库存）</button>` : ''}
+        ${!canIssue ? '<span class="no-permission-tip-inline">⚠️ 当前角色无出库权限</span>' : ''}
+      </div>`;
+    } else if (schedule.status === '调度已出库') {
+      actionButtons = `<div class="schedule-actions">
+        ${canReturn ? `<button class="secondary" data-sched-return="${schedule.id}">确认回库闭环</button>` : ''}
+        ${!canReturn ? '<span class="no-permission-tip-inline">⚠️ 当前角色无回库权限</span>' : ''}
+      </div>`;
+    }
+    const metaInfo = `
+      <div class="meta">关联演出项目：${escapeHtml(projectLabel)}</div>
+      ${schedule.useWindow ? `<div class="meta">使用时段：${escapeHtml(schedule.useWindow)}</div>` : ''}
+      ${schedule.operator ? `<div class="meta">操作人员：${escapeHtml(schedule.operator)}</div>` : ''}
+      ${schedule.approver ? `<div class="meta">审批人：${escapeHtml(schedule.approver)}　审批时间：${fmtDate(schedule.approvedAt)}</div>` : ''}
+      ${schedule.issuer ? `<div class="meta">出库人：${escapeHtml(schedule.issuer)}　出库时间：${fmtDate(schedule.issuedAt)}</div>` : ''}
+      ${schedule.returner ? `<div class="meta">回库人：${escapeHtml(schedule.returner)}　回库时间：${fmtDate(schedule.returnedAt)}</div>` : ''}
+      ${schedule.note ? `<div class="meta">备注：${escapeHtml(schedule.note)}</div>` : ''}
+    `;
+    const deleteBtn = canDelete ? `<button class="danger" data-delete-schedule="${schedule.id}" style="margin-left:auto;">删除调度单</button>` : '';
+    expandContent = `
+      <div class="schedule-detail">
+        ${metaInfo}
+        <div class="detail">${detailRows}</div>
+        ${itemsTable}
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+          ${actionButtons}
+          ${deleteBtn}
+        </div>
+      </div>
+    `;
+  }
+  const summaryHtml = summary ? `<p>${escapeHtml(summary)}</p>` : '';
+  return `<article class="card schedule-card">
+    <div class="card-head" data-expand-schedule="${schedule.id}" style="cursor:pointer;">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <div class="meta">演出：${escapeHtml(projectLabel)}　${summaryHtml ? summaryHtml : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}
+        <span class="meta">${itemsCount.length}条明细，共${totalQty}单位</span>
+        <span class="meta">${isExpanded ? '▲ 收起' : '▼ 展开详情'}</span>
+      </div>
+    </div>
+    ${expandContent}
+    ${historyHtml(schedule)}
+  </article>`;
+}
+
+function renderScheduleList(view) {
+  const query = state.filters[view.id]?.search?.trim() || '';
+  const statusFilter = state.filters[view.id]?.status || '';
+  let items = [...(state.db[view.collection] || [])];
+  if (query) {
+    items = items.filter(item => view.searchFields.some(field => {
+      const raw = String(item[field] || '');
+      if (raw.includes(query)) return true;
+      if (field === 'projectId') {
+        const p = state.db.projects?.find(x => x.id === item[field]);
+        if (p && (p.name.includes(query) || p.venue.includes(query))) return true;
+      }
+      return false;
+    }));
+  }
+  if (statusFilter) items = items.filter(item => item[view.statusField] === statusFilter);
+  return items.length ? items.map(item => renderScheduleCard(item, view)).join('') : '<div class="empty">暂无调度单</div>';
+}
+
+function renderScheduleView(view) {
+  const statusOptions = view.statusOptions || [];
+  const canCreate = canCurrentUser('create', 'schedules');
+  const batches = (state.db.batches || []);
+  const projectOptions = (state.db.projects || []);
+  const createForm = canCreate ? `
+    <form class="panel" data-schedule-form data-create="schedules" data-view="${view.id}">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="form-grid">${view.fields.map(f => {
+        if (f.type === 'textarea') return `<label class="${f.wide ? 'wide' : ''}">${escapeHtml(f.label)}<textarea name="${f.name}" ${f.required ? 'required' : ''}></textarea></label>`;
+        if (f.type === 'relation') {
+          const items = state.db[f.collection] || [];
+          return `<label class="${f.wide ? 'wide' : ''}">${escapeHtml(f.label)}<select name="${f.name}" ${f.required ? 'required' : ''}><option value="">请选择</option>${optionList(items, f.labelFields)}</select></label>`;
+        }
+        return `<label class="${f.wide ? 'wide' : ''}">${escapeHtml(f.label)}<input type="text" name="${f.name}" ${f.required ? 'required' : ''}></label>`;
+      }).join('')}</div>
+      <h3 style="margin:16px 0 8px;">用药明细</h3>
+      <table class="schedule-items-table">
+        <thead>
+          <tr><th>药剂批次（库存/等级）</th><th>喷点/使用位置</th><th>所需安全等级</th><th>领用数量</th><th>操作</th></tr>
+        </thead>
+        <tbody data-sched-rows>
+          ${renderScheduleFormRows()}
+        </tbody>
+      </table>
+      <div class="actions" style="justify-content:space-between;">
+        <button type="button" class="ghost" data-sched-add-row>+ 新增明细行</button>
+        <button>${escapeHtml(view.submitLabel || '提交')}</button>
+      </div>
+      <p class="meta" style="margin-top:8px;">💡 兼容旧流程：单批次领用可继续使用「演出审批」标签页，也可在此处仅添加一行明细。</p>
+    </form>
+  ` : `
+    <div class="panel no-permission-panel">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="no-permission-tip">⚠️ 当前用户无权限创建调度单，请切换到演出负责人角色。</div>
+    </div>
+  `;
+  return `<section class="view" id="${view.id}">
+    <div class="grid">
+      ${createForm}
+      <div class="panel">
+        <h2>${escapeHtml(view.listTitle)}</h2>
+        <div class="toolbar">
+          <input data-search="${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}" value="${escapeHtml(state.filters[view.id]?.search || '')}">
+          <select data-status-filter="${view.id}">
+            <option value="">全部状态</option>
+            ${statusOptions.map(opt => `<option${state.filters[view.id]?.status === opt ? ' selected' : ''}>${escapeHtml(opt)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="list" id="list-${view.id}">${renderScheduleList(view)}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function collectScheduleReturnData(scheduleId) {
+  const inputs = state.scheduleReturnInputs?.[scheduleId] || {};
+  const schedule = state.db.schedules?.find(s => s.id === scheduleId);
+  const items = (schedule?.items || []).map(it => {
+    const r = inputs[it.batchId] || {};
+    return {
+      batchId: it.batchId,
+      returned: Number(r.returned ?? it.returned ?? 0),
+      wasted: Number(r.wasted ?? it.wasted ?? 0)
+    };
+  });
+  return { items };
+}
+
 function applyAutoFill(select) {
   const form = select.closest('form');
   if (!form) return;
@@ -1244,6 +1543,8 @@ function render() {
     if (view.type === 'waste') return renderWasteView(view);
     if (view.type === 'audit-logs') return renderAuditLogsView(view);
     if (view.type === 'batch-import') return renderBatchImportView(view);
+    if (view.type === 'schedule-board') return renderScheduleBoardView(view);
+    if (view.type === 'schedule') return renderScheduleView(view);
     return renderCrudView(view);
   }).join('');
   setTab(state.activeTab || state.config.views[0].id);
@@ -1650,6 +1951,83 @@ document.addEventListener('click', async (e) => {
     render();
     return;
   }
+
+  const expandSchedule = e.target.closest('[data-expand-schedule]');
+  if (expandSchedule) {
+    const id = expandSchedule.dataset.expandSchedule;
+    state.expandedSchedule = state.expandedSchedule === id ? null : id;
+    render();
+    return;
+  }
+
+  const schedAddRow = e.target.closest('[data-sched-add-row]');
+  if (schedAddRow) {
+    if (!state.scheduleFormRows) state.scheduleFormRows = [{}];
+    state.scheduleFormRows.push({});
+    render();
+    return;
+  }
+
+  const schedRemoveRow = e.target.closest('[data-sched-remove-row]');
+  if (schedRemoveRow) {
+    const idx = Number(schedRemoveRow.dataset.schedRemoveRow);
+    if (state.scheduleFormRows && state.scheduleFormRows.length > 1) {
+      state.scheduleFormRows.splice(idx, 1);
+      render();
+    }
+    return;
+  }
+
+  const schedApprove = e.target.closest('[data-sched-approve]');
+  if (schedApprove) {
+    const id = schedApprove.dataset.schedApprove;
+    await api(`/api/schedules/${id}/approve`, { method: 'POST' });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const schedIssue = e.target.closest('[data-sched-issue]');
+  if (schedIssue) {
+    const id = schedIssue.dataset.schedIssue;
+    await api(`/api/schedules/${id}/issue`, { method: 'POST' });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const schedReturn = e.target.closest('[data-sched-return]');
+  if (schedReturn && !schedReturn.dataset.schedBatch) {
+    const id = schedReturn.dataset.schedReturn;
+    const payload = collectScheduleReturnData(id);
+    await api(`/api/schedules/${id}/return`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const deleteSchedule = e.target.closest('[data-delete-schedule]');
+  if (deleteSchedule) {
+    const id = deleteSchedule.dataset.deleteSchedule;
+    if (!confirm('确定删除该调度单吗？此操作不可恢复。')) return;
+    await api(`/api/schedules/${id}`, { method: 'DELETE' });
+    state.expandedSchedule = null;
+    await loadDb();
+    render();
+    return;
+  }
+
+  const jumpSchedules = e.target.closest('[data-jump-schedules]');
+  if (jumpSchedules) {
+    state.activeTab = 'schedules';
+    state.activeView = 'schedules';
+    render();
+    return;
+  }
 });
 
 document.addEventListener('input', (e) => {
@@ -1713,6 +2091,35 @@ document.addEventListener('input', (e) => {
     if (!state.wasteDisposalInputs) state.wasteDisposalInputs = {};
     state.wasteDisposalInputs[wId] = state.wasteDisposalInputs[wId] || {};
     state.wasteDisposalInputs[wId].disposalNote = wasteNoteInput.value;
+    return;
+  }
+
+  const schedRowInput = e.target.closest('[data-sched-row][data-sched-field]');
+  if (schedRowInput) {
+    const idx = Number(schedRowInput.dataset.schedRow);
+    const field = schedRowInput.dataset.schedField;
+    if (!state.scheduleFormRows) state.scheduleFormRows = [{}];
+    if (!state.scheduleFormRows[idx]) state.scheduleFormRows[idx] = {};
+    state.scheduleFormRows[idx][field] = schedRowInput.value;
+    if (field === 'batchId') {
+      const batch = (state.db.batches || []).find(b => b.id === schedRowInput.value);
+      if (batch) {
+        state.scheduleFormRows[idx].safetyLevel = batch.safetyLevel;
+      }
+    }
+    render();
+    return;
+  }
+
+  const schedReturnInput = e.target.closest('[data-sched-return][data-sched-batch][data-sched-return-field]');
+  if (schedReturnInput) {
+    const sId = schedReturnInput.dataset.schedReturn;
+    const bId = schedReturnInput.dataset.schedBatch;
+    const field = schedReturnInput.dataset.schedReturnField;
+    if (!state.scheduleReturnInputs) state.scheduleReturnInputs = {};
+    if (!state.scheduleReturnInputs[sId]) state.scheduleReturnInputs[sId] = {};
+    if (!state.scheduleReturnInputs[sId][bId]) state.scheduleReturnInputs[sId][bId] = {};
+    state.scheduleReturnInputs[sId][bId][field] = schedReturnInput.value;
     return;
   }
 });
@@ -1819,6 +2226,21 @@ document.addEventListener('submit', async (e) => {
       });
     }
     state.activeModal = null;
+    await loadDb();
+    render();
+    return;
+  }
+
+  const scheduleForm = e.target.closest('[data-schedule-form]');
+  if (scheduleForm) {
+    e.preventDefault();
+    const data = collectScheduleFormData();
+    await api('/api/schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    state.scheduleFormRows = [{}];
     await loadDb();
     render();
     return;

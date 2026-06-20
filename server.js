@@ -1014,6 +1014,410 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
   }
 });
 
+const LEVEL_RANK = { '低': 1, '中': 2, '高': 3 };
+
+function validateScheduleItems(db, items) {
+  const errors = [];
+  if (!Array.isArray(items) || items.length === 0) {
+    errors.push('至少需要一条用药明细');
+    return { errors, validated: [] };
+  }
+  const validated = [];
+  const seenBatchIds = new Set();
+  const seenSprayPoints = new Set();
+  items.forEach((item, idx) => {
+    const lineNo = idx + 1;
+    if (!item.batchId) {
+      errors.push(`第${lineNo}行：请选择药剂批次`);
+      return;
+    }
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (!batch) {
+      errors.push(`第${lineNo}行：药剂批次不存在`);
+      return;
+    }
+    const qty = Number(item.quantity || 0);
+    if (qty <= 0) {
+      errors.push(`第${lineNo}行：领用数量必须大于0`);
+      return;
+    }
+    if (!item.sprayPoint || String(item.sprayPoint).trim() === '') {
+      errors.push(`第${lineNo}行：请填写喷点/使用位置`);
+      return;
+    }
+    const reqLevel = item.safetyLevel || '低';
+    if (LEVEL_RANK[batch.safetyLevel] < LEVEL_RANK[reqLevel]) {
+      errors.push(`第${lineNo}行：批次安全等级(${batch.safetyLevel})低于所需等级(${reqLevel})`);
+    }
+    validated.push({
+      batchId: item.batchId,
+      batch,
+      sprayPoint: String(item.sprayPoint || '').trim(),
+      safetyLevel: reqLevel,
+      quantity: qty,
+      returned: 0,
+      wasted: 0
+    });
+  });
+  return { errors, validated };
+}
+
+app.post('/api/schedules', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'create', 'schedules', res)) return;
+
+  const db = await readDb();
+  if (!db.schedules) db.schedules = [];
+
+  const { code, projectId, useWindow, operator, note, items } = req.body;
+  if (!code || String(code).trim() === '') return res.status(409).json({ error: '调度单号不能为空' });
+  if (!projectId) return res.status(409).json({ error: '请选择演出项目' });
+  if (!useWindow || String(useWindow).trim() === '') return res.status(409).json({ error: '使用时段不能为空' });
+  if (!operator || String(operator).trim() === '') return res.status(409).json({ error: '操作人员不能为空' });
+
+  const project = db.projects.find((p) => p.id === projectId);
+  if (!project) return res.status(409).json({ error: '演出项目不存在' });
+
+  const { errors, validated } = validateScheduleItems(db, items);
+  if (errors.length) return res.status(409).json({ error: errors.join('；') });
+
+  const existing = db.schedules.find((s) => s.code === code);
+  if (existing) return res.status(409).json({ error: '调度单号已存在' });
+
+  const now = new Date().toISOString();
+  const op = req.currentUser;
+  const totalQty = validated.reduce((sum, it) => sum + it.quantity, 0);
+
+  const schedule = {
+    id: `schedules-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    code: String(code).trim(),
+    projectId,
+    showName: project.name || '',
+    venue: project.venue || '',
+    useWindow: String(useWindow).trim(),
+    operator: String(operator).trim(),
+    note: note || '',
+    status: '调度待审批',
+    totalQuantity: totalQty,
+    totalReturned: 0,
+    totalWasted: 0,
+    items: validated.map((v) => ({
+      batchId: v.batchId,
+      sprayPoint: v.sprayPoint,
+      safetyLevel: v.safetyLevel,
+      quantity: v.quantity,
+      returned: 0,
+      wasted: 0
+    })),
+    createdAt: now,
+    updatedAt: now,
+    createdBy: { id: op.id, name: op.name, role: op.role, roleLabel: op.roleLabel },
+    history: [stamp('调度创建', `调度单：${code}，演出：${project.name || ''}，共${validated.length}条明细，合计${totalQty}单位`, op)]
+  };
+
+  db.schedules.push(schedule);
+  writeAuditLog(db, {
+    actionType: '调度创建',
+    collection: 'schedules',
+    targetId: schedule.id,
+    targetItem: schedule,
+    note: `演出：${project.name || ''}，明细${validated.length}条，合计${totalQty}单位`,
+    operator: op
+  });
+  await writeDb(db);
+  res.status(201).json(schedule);
+});
+
+app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'schedules-approve', res)) return;
+
+  const db = await readDb();
+  const { id } = req.params;
+  const schedule = db.schedules?.find((s) => s.id === id);
+  if (!schedule) return res.status(404).json({ error: '调度单不存在' });
+  if (schedule.status !== '调度待审批') return res.status(409).json({ error: '只有调度待审批状态可以审批' });
+
+  const now = new Date();
+  const errors = [];
+  (schedule.items || []).forEach((item, idx) => {
+    const lineNo = idx + 1;
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (!batch) {
+      errors.push(`第${lineNo}行：关联批次不存在`);
+      return;
+    }
+    if (batch.status !== '可用') {
+      errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可出库`);
+    }
+    const stockQty = Number(batch.quantity || 0);
+    if (item.quantity > stockQty) {
+      errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」库存(${stockQty})不足，申请${item.quantity}`);
+    }
+    if (batch.expiresAt) {
+      const expire = new Date(batch.expiresAt);
+      if (expire < now) {
+        errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」已过期`);
+      }
+    }
+    if (LEVEL_RANK[batch.safetyLevel] < LEVEL_RANK[item.safetyLevel]) {
+      errors.push(`第${lineNo}行：批次安全等级(${batch.safetyLevel})低于所需等级(${item.safetyLevel})`);
+    }
+  });
+
+  if (errors.length) return res.status(409).json({ error: errors.join('；') });
+
+  const op = req.currentUser;
+  const nowStr = now.toISOString();
+  const approverLabel = `${op.name}（${op.roleLabel}）`;
+  const beforeSchedule = JSON.parse(JSON.stringify(schedule));
+
+  schedule.status = '调度已审批';
+  schedule.approver = approverLabel;
+  schedule.approverInfo = { id: op.id, name: op.name, role: op.role, roleLabel: op.roleLabel };
+  schedule.approvedAt = nowStr;
+  schedule.updatedAt = nowStr;
+  schedule.history = schedule.history || [];
+  schedule.history.unshift(stamp('调度审批通过', `审批人：${approverLabel}，共${schedule.items.length}条明细`, op));
+
+  (schedule.items || []).forEach((item) => {
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (batch) {
+      batch.updatedAt = nowStr;
+      batch.history = batch.history || [];
+      batch.history.unshift(stamp('调度审批通过', `调度单：${schedule.code}，申请：${item.quantity}${batch.unit || ''}`, op));
+    }
+  });
+
+  writeAuditLog(db, {
+    actionType: '调度审批通过',
+    collection: 'schedules',
+    targetId: schedule.id,
+    targetItem: schedule,
+    beforeItem: beforeSchedule,
+    note: `审批人：${approverLabel}，共${schedule.items.length}条明细`,
+    operator: op
+  });
+
+  await writeDb(db);
+  res.json(schedule);
+});
+
+app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'schedules-issue', res)) return;
+
+  const db = await readDb();
+  const { id } = req.params;
+  const schedule = db.schedules?.find((s) => s.id === id);
+  if (!schedule) return res.status(404).json({ error: '调度单不存在' });
+  if (schedule.status !== '调度已审批') return res.status(409).json({ error: '只有调度已审批状态可以出库' });
+
+  const now = new Date();
+  const errors = [];
+  (schedule.items || []).forEach((item, idx) => {
+    const lineNo = idx + 1;
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (!batch) {
+      errors.push(`第${lineNo}行：关联批次不存在`);
+      return;
+    }
+    if (batch.status !== '可用') {
+      errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可出库`);
+    }
+    const stockQty = Number(batch.quantity || 0);
+    if (item.quantity > stockQty) {
+      errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」库存(${stockQty})不足，申请${item.quantity}`);
+    }
+  });
+
+  if (errors.length) return res.status(409).json({ error: errors.join('；') });
+
+  const op = req.currentUser;
+  const nowStr = now.toISOString();
+  const issuerLabel = `${op.name}（${op.roleLabel}）`;
+  const beforeSchedule = JSON.parse(JSON.stringify(schedule));
+  const batchSnapshots = {};
+  (schedule.items || []).forEach((item) => {
+    const b = db.batches.find((x) => x.id === item.batchId);
+    if (b) batchSnapshots[b.id] = JSON.parse(JSON.stringify(b));
+  });
+
+  (schedule.items || []).forEach((item) => {
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (batch) {
+      const currentQty = Number(batch.quantity || 0);
+      batch.quantity = currentQty - item.quantity;
+      batch.updatedAt = nowStr;
+      batch.history = batch.history || [];
+      batch.history.unshift(stamp('调度出库', `调度单：${schedule.code}，出库：-${item.quantity}${batch.unit || ''}，剩余：${batch.quantity}${batch.unit || ''}`, op));
+    }
+  });
+
+  schedule.status = '调度已出库';
+  schedule.issuer = issuerLabel;
+  schedule.issuerInfo = { id: op.id, name: op.name, role: op.role, roleLabel: op.roleLabel };
+  schedule.issuedAt = nowStr;
+  schedule.updatedAt = nowStr;
+  schedule.history = schedule.history || [];
+  const issuedQty = (schedule.items || []).reduce((s, it) => s + it.quantity, 0);
+  schedule.history.unshift(stamp('调度出库', `出库人：${issuerLabel}，共${schedule.items.length}条明细，合计出库${issuedQty}单位`, op));
+
+  writeAuditLog(db, {
+    actionType: '调度出库',
+    collection: 'schedules',
+    targetId: schedule.id,
+    targetItem: schedule,
+    beforeItem: beforeSchedule,
+    note: `出库人：${issuerLabel}，共${schedule.items.length}条明细，合计${issuedQty}单位`,
+    operator: op
+  });
+
+  (schedule.items || []).forEach((item) => {
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (batch && batchSnapshots[batch.id]) {
+      writeAuditLog(db, {
+        actionType: '调度出库(关联)',
+        collection: 'batches',
+        targetId: batch.id,
+        targetItem: batch,
+        beforeItem: batchSnapshots[batch.id],
+        note: `调度单：${schedule.code}，出库：-${item.quantity}${batch.unit || ''}`,
+        operator: op
+      });
+    }
+  });
+
+  await writeDb(db);
+  res.json(schedule);
+});
+
+app.post('/api/schedules/:id/return', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'schedules-return', res)) return;
+
+  const db = await readDb();
+  const { id } = req.params;
+  const schedule = db.schedules?.find((s) => s.id === id);
+  if (!schedule) return res.status(404).json({ error: '调度单不存在' });
+  if (schedule.status !== '调度已出库') return res.status(409).json({ error: '只有调度已出库状态可以回库' });
+
+  const { items: returnItems } = req.body;
+  if (!Array.isArray(returnItems) || returnItems.length === 0) {
+    return res.status(409).json({ error: '请填写回库明细' });
+  }
+
+  const errors = [];
+  const returnMap = {};
+  returnItems.forEach((ri, idx) => {
+    const lineNo = idx + 1;
+    if (!ri.batchId) { errors.push(`第${lineNo}行：缺少batchId`); return; }
+    const returned = Number(ri.returned || 0);
+    const wasted = Number(ri.wasted || 0);
+    if (returned < 0 || wasted < 0) {
+      errors.push(`第${lineNo}行：回库/报废数量不能为负数`);
+      return;
+    }
+    const schedItem = (schedule.items || []).find((it) => it.batchId === ri.batchId);
+    if (!schedItem) {
+      errors.push(`第${lineNo}行：批次不在该调度单明细中`);
+      return;
+    }
+    if (returned + wasted > schedItem.quantity) {
+      errors.push(`第${lineNo}行：回库(${returned})+报废(${wasted})不能超过出库数量(${schedItem.quantity})`);
+      return;
+    }
+    returnMap[ri.batchId] = { returned, wasted };
+  });
+
+  if (errors.length) return res.status(409).json({ error: errors.join('；') });
+
+  const op = req.currentUser;
+  const nowStr = new Date().toISOString();
+  const returnerLabel = `${op.name}（${op.roleLabel}）`;
+  const beforeSchedule = JSON.parse(JSON.stringify(schedule));
+  const batchSnapshots = {};
+
+  let totalReturned = 0;
+  let totalWasted = 0;
+
+  (schedule.items || []).forEach((item) => {
+    const rm = returnMap[item.batchId];
+    if (rm) {
+      item.returned = rm.returned;
+      item.wasted = rm.wasted;
+      totalReturned += rm.returned;
+      totalWasted += rm.wasted;
+      const batch = db.batches.find((b) => b.id === item.batchId);
+      if (batch) {
+        batchSnapshots[batch.id] = JSON.parse(JSON.stringify(batch));
+        const currentQty = Number(batch.quantity || 0);
+        batch.quantity = currentQty + rm.returned;
+        batch.updatedAt = nowStr;
+        batch.history = batch.history || [];
+        batch.history.unshift(stamp('调度回库', `调度单：${schedule.code}，回库：+${rm.returned}${batch.unit || ''}，报废：${rm.wasted}${batch.unit || ''}，现有：${batch.quantity}${batch.unit || ''}`, op));
+      }
+    }
+  });
+
+  schedule.totalReturned = totalReturned;
+  schedule.totalWasted = totalWasted;
+  schedule.status = '调度已回库';
+  schedule.returner = returnerLabel;
+  schedule.returnerInfo = { id: op.id, name: op.name, role: op.role, roleLabel: op.roleLabel };
+  schedule.returnedAt = nowStr;
+  schedule.updatedAt = nowStr;
+  schedule.history = schedule.history || [];
+  schedule.history.unshift(stamp('调度回库', `回库人：${returnerLabel}，回库合计：${totalReturned}，报废合计：${totalWasted}`, op));
+
+  writeAuditLog(db, {
+    actionType: '调度回库',
+    collection: 'schedules',
+    targetId: schedule.id,
+    targetItem: schedule,
+    beforeItem: beforeSchedule,
+    note: `回库合计：${totalReturned}，报废合计：${totalWasted}`,
+    operator: op
+  });
+
+  Object.keys(batchSnapshots).forEach((bid) => {
+    const batch = db.batches.find((b) => b.id === bid);
+    if (batch) {
+      writeAuditLog(db, {
+        actionType: '调度回库(关联)',
+        collection: 'batches',
+        targetId: batch.id,
+        targetItem: batch,
+        beforeItem: batchSnapshots[bid],
+        note: `调度单：${schedule.code}`,
+        operator: op
+      });
+    }
+  });
+
+  await writeDb(db);
+  res.json(schedule);
+});
+
+app.delete('/api/schedules/:id', requireUser, async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  if (!db.schedules) return res.status(404).json({ error: 'unknown collection' });
+  if (!checkPermission(req.currentUser, 'delete', 'schedules', res)) return;
+  const item = db.schedules.find((s) => s.id === id);
+  if (!item) return res.status(404).json({ error: 'not found' });
+  if (['调度已审批', '调度已出库', '调度已回库'].includes(item.status)) {
+    return res.status(409).json({ error: '已进入审批或出库流程的调度单不能删除' });
+  }
+  writeAuditLog(db, {
+    actionType: '删除',
+    collection: 'schedules',
+    targetId: id,
+    beforeItem: item,
+    note: '删除调度单',
+    operator: req.currentUser
+  });
+  db.schedules = db.schedules.filter((s) => s.id !== id);
+  await writeDb(db);
+  res.status(204).end();
+});
+
 app.listen(PORT, () => {
   console.log(`${config.title} running at http://localhost:${PORT}`);
 });
