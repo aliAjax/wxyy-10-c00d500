@@ -900,3 +900,68 @@ main {
     grid-template-columns: 1fr;
   }
 }
+
+/* 审计日志模块样式 */
+.audit-toolbar {
+  display: grid;
+  grid-template-columns: 180px 180px 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.audit-log-card .audit-changes {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.audit-changes-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.audit-changes-list {
+  display: grid;
+  gap: 6px;
+}
+
+.audit-change-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.audit-change-key {
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 80px;
+}
+
+.audit-change-before {
+  color: var(--bad);
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+
+.audit-change-arrow {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.audit-change-after {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .audit-toolbar {
+    grid-template-columns: 1fr;
+  }
+}

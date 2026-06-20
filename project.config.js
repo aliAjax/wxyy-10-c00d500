@@ -36,7 +36,8 @@ module.exports = {
     cabinets: { label: '柜位台账' },
     projects: { label: '演出项目' },
     stocktakes: { label: '库存盘点' },
-    wastes: { label: '报废处置' }
+    wastes: { label: '报废处置' },
+    auditLogs: { label: '操作审计日志' }
   },
   alerts: {
     expiringDays: 30,
@@ -297,6 +298,12 @@ module.exports = {
         { label: '见证人', name: 'witness' },
         { label: '备注', name: 'note', type: 'textarea', wide: true }
       ]
+    },
+    {
+      id: 'audit-logs',
+      label: '操作审计日志',
+      type: 'audit-logs',
+      collection: 'auditLogs'
     }
   ],
   actions: [
@@ -331,5 +338,9 @@ module.exports = {
     { id: 'project-complete', label: '已完成', collection: 'projects', patches: [{ field: 'status', value: '已完成' }] },
     { id: 'project-cancel', label: '取消', collection: 'projects', danger: true, patches: [{ field: 'status', value: '已取消' }] },
     { id: 'waste-reject', label: '驳回', collection: 'wastes', danger: true, patches: [{ field: 'status', value: '已驳回' }] }
-  ]
+  ],
+  auditLog: {
+    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '回库闭环', '锁定', '可用', '报废', '盘点录入', '盘点确认', '确认处置', '报废审批(关联)', '报废扣减(关联)'],
+    targetCollections: ['batches', 'requests', 'wastes', 'stocktakes', 'suppliers', 'cabinets', 'projects']
+  }
 };

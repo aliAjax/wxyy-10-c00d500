@@ -800,6 +800,108 @@ function refreshWasteList(viewId) {
   if (listEl) listEl.innerHTML = renderWasteList(view);
 }
 
+function renderAuditLogCard(log) {
+  const collLabel = collectionLabel(log.targetCollection);
+  const changes = log.changes || {};
+  const changeKeys = Object.keys(changes);
+  let changesHtml = '';
+  if (changeKeys.length) {
+    changesHtml = `<div class="audit-changes">
+      <div class="audit-changes-title">字段变化：</div>
+      <div class="audit-changes-list">
+        ${changeKeys.map((key) => {
+          const c = changes[key];
+          const beforeVal = c.before === undefined || c.before === null || c.before === '' ? '(空)' : c.before;
+          const afterVal = c.after === undefined || c.after === null || c.after === '' ? '(空)' : c.after;
+          return `<div class="audit-change-item">
+            <span class="audit-change-key">${escapeHtml(key)}</span>
+            <span class="audit-change-before">${escapeHtml(String(beforeVal))}</span>
+            <span class="audit-change-arrow">→</span>
+            <span class="audit-change-after">${escapeHtml(String(afterVal))}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  return `<article class="card audit-log-card">
+    <div class="card-head">
+      <div>
+        <h3>${escapeHtml(log.actionType)}</h3>
+        <div class="meta">目标：${escapeHtml(collLabel)} · ${escapeHtml(log.targetLabel || log.targetId)}</div>
+      </div>
+      ${pill(log.actionType, toneFor(log.actionType) || '')}
+    </div>
+    ${log.note ? `<p>${escapeHtml(log.note)}</p>` : ''}
+    <div class="detail">
+      <div>操作时间<br><strong>${fmtDate(log.createdAt)}</strong></div>
+      <div>目标集合<br><strong>${escapeHtml(collLabel)}</strong></div>
+      <div>操作人<br><strong>${escapeHtml(log.operator || '系统')}</strong></div>
+    </div>
+    ${changesHtml}
+  </article>`;
+}
+
+function renderAuditLogsList(view) {
+  const actionType = document.getElementById(`action-type-${view.id}`)?.value || '';
+  const targetColl = document.getElementById(`target-collection-${view.id}`)?.value || '';
+  const keyword = document.getElementById(`search-${view.id}`)?.value.trim() || '';
+
+  let items = [...(state.db.auditLogs || [])];
+
+  if (actionType) {
+    items = items.filter((item) => item.actionType === actionType);
+  }
+  if (targetColl) {
+    items = items.filter((item) => item.targetCollection === targetColl);
+  }
+  if (keyword) {
+    items = items.filter((item) => {
+      const inLabel = (item.targetLabel || '').includes(keyword);
+      const inNote = (item.note || '').includes(keyword);
+      const inOperator = (item.operator || '').includes(keyword);
+      const inId = (item.targetId || '').includes(keyword);
+      const inAction = (item.actionType || '').includes(keyword);
+      return inLabel || inNote || inOperator || inId || inAction;
+    });
+  }
+
+  if (!items.length) return '<div class="empty">暂无审计日志</div>';
+
+  return items.map((log) => renderAuditLogCard(log)).join('');
+}
+
+function refreshAuditLogsList(viewId) {
+  const view = state.config.views.find((v) => v.id === viewId);
+  if (!view) return;
+  const listEl = document.getElementById(`list-${viewId}`);
+  if (listEl) listEl.innerHTML = renderAuditLogsList(view);
+}
+
+function renderAuditLogsView(view) {
+  const actionTypes = state.config.auditLog?.actionTypes || [];
+  const targetCollections = state.config.auditLog?.targetCollections || [];
+
+  return `<section class="view" id="${view.id}">
+    <div class="panel">
+      <h2>操作审计日志</h2>
+      <p class="meta">所有关键操作均会自动记录，日志只读不可修改。</p>
+      <div class="audit-toolbar">
+        <select id="action-type-${view.id}">
+          <option value="">全部操作类型</option>
+          ${actionTypes.map((type) => `<option>${escapeHtml(type)}</option>`).join('')}
+        </select>
+        <select id="target-collection-${view.id}">
+          <option value="">全部目标集合</option>
+          ${targetCollections.map((coll) => `<option value="${coll}">${escapeHtml(collectionLabel(coll))}</option>`).join('')}
+        </select>
+        <input id="search-${view.id}" placeholder="搜索关键词（标题、备注、操作人等）">
+      </div>
+      <div class="list" id="list-${view.id}">${renderAuditLogsList(view)}</div>
+    </div>
+  </section>`;
+}
+
 function applyAutoFill(select) {
   const form = select.closest('form');
   if (!form) return;
@@ -828,6 +930,7 @@ function render() {
     if (view.type === 'dashboard') return renderDashboardView(view);
     if (view.type === 'stocktake') return renderStocktakeView(view);
     if (view.type === 'waste') return renderWasteView(view);
+    if (view.type === 'audit-logs') return renderAuditLogsView(view);
     return renderCrudView(view);
   }).join('');
   setTab(state.activeTab || state.config.views[0].id);
@@ -1109,10 +1212,17 @@ document.addEventListener('input', (event) => {
       refreshStocktakeList(crudView.id);
     } else if (crudView.type === 'waste') {
       refreshWasteList(crudView.id);
+    } else if (crudView.type === 'audit-logs') {
+      refreshAuditLogsList(crudView.id);
     } else {
       const listEl = $(`#list-${crudView.id}`);
       if (listEl) listEl.innerHTML = renderList(crudView);
     }
+  }
+
+  const auditView = state.config.views.find((entry) => entry.id && (event.target.id === `action-type-${entry.id}` || event.target.id === `target-collection-${entry.id}`));
+  if (auditView && auditView.type === 'audit-logs') {
+    refreshAuditLogsList(auditView.id);
   }
 
   const stInput = event.target.closest('.st-input');

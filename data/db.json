@@ -67,6 +67,24 @@
           "note": ""
         }
       ]
+    },
+    {
+      "id": "cabinets-1781950477773-7844c",
+      "code": "测试柜-001",
+      "area": "测试区域",
+      "capacity": 20,
+      "manager": "测试员",
+      "status": "空闲",
+      "note": "测试创建审计日志",
+      "createdAt": "2026-06-20T10:14:37.773Z",
+      "updatedAt": "2026-06-20T10:14:37.773Z",
+      "history": [
+        {
+          "at": "2026-06-20T10:14:37.773Z",
+          "action": "创建",
+          "note": "测试创建审计日志"
+        }
+      ]
     }
   ],
   "batches": [
@@ -77,14 +95,19 @@
       "batchNo": "PY-A17-2605",
       "cabinetId": "cabinet-seed-1",
       "safetyLevel": "高",
-      "quantity": 18,
+      "quantity": 14,
       "unit": "罐",
       "expiresAt": "2026-10-30",
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-06-16T09:00:00.000Z",
-      "updatedAt": "2026-06-16T09:00:00.000Z",
+      "updatedAt": "2026-06-20T10:18:28.118Z",
       "history": [
+        {
+          "at": "2026-06-20T10:18:28.118Z",
+          "action": "出库",
+          "note": "数量调整"
+        },
         {
           "at": "2026-06-16T09:00:00.000Z",
           "action": "创建",
@@ -152,10 +175,15 @@
       "unit": "个",
       "expiresAt": "2026-12-31",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-04-10T08:30:00.000Z",
-      "updatedAt": "2026-04-10T08:30:00.000Z",
+      "updatedAt": "2026-06-20T10:15:11.719Z",
       "history": [
+        {
+          "at": "2026-06-20T10:15:11.719Z",
+          "action": "锁定",
+          "note": "状态流转"
+        },
         {
           "at": "2026-04-10T08:30:00.000Z",
           "action": "创建",
@@ -320,13 +348,18 @@
       "operator": "许川",
       "quantity": 4,
       "safetyLevel": "高",
-      "status": "待审批",
+      "status": "已出库",
       "memo": "仅用于舞台前沿两侧喷点",
       "returned": 0,
       "wasted": 0,
       "createdAt": "2026-06-18T12:00:00.000Z",
-      "updatedAt": "2026-06-18T12:00:00.000Z",
+      "updatedAt": "2026-06-20T10:18:28.117Z",
       "history": [
+        {
+          "at": "2026-06-20T10:18:28.117Z",
+          "action": "出库",
+          "note": "状态流转"
+        },
         {
           "at": "2026-06-18T12:00:00.000Z",
           "action": "创建",
@@ -649,6 +682,265 @@
       "witness": "",
       "disposedAt": "2026-06-20T09:11:26.442Z",
       "disposedBy": "测试"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "auditLogs-1781950708118-90acf",
+      "actionType": "出库(关联)",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": {
+        "quantity": {
+          "before": 18,
+          "after": 14
+        },
+        "updatedAt": {
+          "before": "2026-06-16T09:00:00.000Z",
+          "after": "2026-06-20T10:18:28.118Z"
+        }
+      },
+      "note": "由 领用申请 操作触发：出库",
+      "operator": "",
+      "createdAt": "2026-06-20T10:18:28.118Z"
+    },
+    {
+      "id": "auditLogs-1781950708118-49e26",
+      "actionType": "出库",
+      "targetCollection": "requests",
+      "targetId": "request-seed-1",
+      "targetLabel": "海港音乐节开场 / 南岸露天剧场",
+      "changes": {
+        "status": {
+          "before": "待审批",
+          "after": "已出库"
+        },
+        "updatedAt": {
+          "before": "2026-06-18T12:00:00.000Z",
+          "after": "2026-06-20T10:18:28.117Z"
+        }
+      },
+      "note": "状态流转",
+      "operator": "",
+      "createdAt": "2026-06-20T10:18:28.118Z"
+    },
+    {
+      "id": "auditLogs-1781950511719-274ca",
+      "actionType": "锁定",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-4",
+      "targetLabel": "旋转风车烟花F08 / YH-F08-2601",
+      "changes": {
+        "status": {
+          "before": "可用",
+          "after": "锁定"
+        },
+        "updatedAt": {
+          "before": "2026-04-10T08:30:00.000Z",
+          "after": "2026-06-20T10:15:11.719Z"
+        }
+      },
+      "note": "状态流转",
+      "operator": "",
+      "createdAt": "2026-06-20T10:15:11.719Z"
+    },
+    {
+      "id": "auditLogs-1781950477774-1ff5c",
+      "actionType": "创建",
+      "targetCollection": "cabinets",
+      "targetId": "cabinets-1781950477773-7844c",
+      "targetLabel": "测试柜-001 / 测试区域",
+      "changes": {
+        "id": {
+          "after": "cabinets-1781950477773-7844c"
+        },
+        "code": {
+          "after": "测试柜-001"
+        },
+        "area": {
+          "after": "测试区域"
+        },
+        "capacity": {
+          "after": 20
+        },
+        "manager": {
+          "after": "测试员"
+        },
+        "status": {
+          "after": "空闲"
+        },
+        "note": {
+          "after": "测试创建审计日志"
+        },
+        "createdAt": {
+          "after": "2026-06-20T10:14:37.773Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T10:14:37.773Z"
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T10:14:37.773Z",
+              "action": "创建",
+              "note": "测试创建审计日志"
+            }
+          ]
+        }
+      },
+      "note": "测试创建审计日志",
+      "operator": "",
+      "createdAt": "2026-06-20T10:14:37.774Z"
+    },
+    {
+      "id": "auditLogs-seed-1",
+      "actionType": "创建",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": null,
+      "note": "入库18罐",
+      "operator": "系统",
+      "createdAt": "2026-06-16T09:00:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-2",
+      "actionType": "创建",
+      "targetCollection": "requests",
+      "targetId": "request-seed-1",
+      "targetLabel": "海港音乐节开场 / 南岸露天剧场",
+      "changes": null,
+      "note": "提交演出领用申请",
+      "operator": "许川",
+      "createdAt": "2026-06-18T12:00:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-3",
+      "actionType": "锁定",
+      "targetCollection": "batches",
+      "targetId": "batch-alert-4",
+      "targetLabel": "高空礼花弹G12 / LH-G12-2510",
+      "changes": {
+        "status": {
+          "before": "可用",
+          "after": "锁定"
+        }
+      },
+      "note": "待质量复检",
+      "operator": "系统",
+      "createdAt": "2026-06-15T08:00:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-4",
+      "actionType": "审批通过",
+      "targetCollection": "wastes",
+      "targetId": "wastes-1781946541870-22b51",
+      "targetLabel": "BF-2026-001 / 过期药剂集中报废",
+      "changes": {
+        "status": {
+          "before": "待审批",
+          "after": "待处置"
+        }
+      },
+      "note": "审批人：王主任，报废数量：5支",
+      "operator": "王主任",
+      "createdAt": "2026-06-20T09:09:21.532Z"
+    },
+    {
+      "id": "auditLogs-seed-5",
+      "actionType": "确认处置",
+      "targetCollection": "wastes",
+      "targetId": "wastes-1781946541870-22b51",
+      "targetLabel": "BF-2026-001 / 过期药剂集中报废",
+      "changes": {
+        "status": {
+          "before": "待处置",
+          "after": "已处置"
+        },
+        "actualQuantity": {
+          "before": 0,
+          "after": 5
+        }
+      },
+      "note": "实际处置：5支，处置方式：专业机构回收，见证人：李明",
+      "operator": "张伟",
+      "createdAt": "2026-06-20T09:09:42.087Z"
+    },
+    {
+      "id": "auditLogs-seed-6",
+      "actionType": "报废扣减(关联)",
+      "targetCollection": "batches",
+      "targetId": "batch-alert-2",
+      "targetLabel": "冷焰火喷泉P20 / PY-P20-2508",
+      "changes": {
+        "quantity": {
+          "before": 15,
+          "after": 10
+        }
+      },
+      "note": "报废单：BF-2026-001，报废数量：-5支，剩余库存：10支",
+      "operator": "",
+      "createdAt": "2026-06-20T09:09:42.087Z"
+    },
+    {
+      "id": "auditLogs-seed-7",
+      "actionType": "盘点确认",
+      "targetCollection": "stocktakes",
+      "targetId": "stocktake-seed-1",
+      "targetLabel": "PD-2026-001 / 6月中旬月度盘点（A区危险品库房）",
+      "changes": {
+        "status": {
+          "before": "录入中",
+          "after": "已确认"
+        }
+      },
+      "note": "差异项2项，盘盈1项(+3发)，盘亏1项(-2罐)，已同步更新批次库存",
+      "operator": "张伟",
+      "createdAt": "2026-06-15T10:30:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-8",
+      "actionType": "创建",
+      "targetCollection": "projects",
+      "targetId": "project-seed-1",
+      "targetLabel": "海港音乐节开场 / 南岸露天剧场",
+      "changes": null,
+      "note": "演出项目建档",
+      "operator": "系统",
+      "createdAt": "2026-06-10T10:00:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-9",
+      "actionType": "出库",
+      "targetCollection": "requests",
+      "targetId": "request-alert-1",
+      "targetLabel": "城市夏夜嘉年华 / 中央广场主舞台",
+      "changes": {
+        "status": {
+          "before": "已审批",
+          "after": "已出库"
+        }
+      },
+      "note": "状态流转",
+      "operator": "系统",
+      "createdAt": "2026-06-14T09:30:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-10",
+      "actionType": "驳回",
+      "targetCollection": "wastes",
+      "targetId": "wastes-1781946627168-24f4a",
+      "targetLabel": "BF-2026-002 / 测试超量报废",
+      "changes": {
+        "status": {
+          "before": "待审批",
+          "after": "已驳回"
+        }
+      },
+      "note": "状态流转",
+      "operator": "系统",
+      "createdAt": "2026-06-20T09:10:45.000Z"
     }
   ]
 }

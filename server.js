@@ -31,6 +31,58 @@ function sortNewest(a, b) {
   return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
 }
 
+const AUDIT_COLLECTION = 'auditLogs';
+
+function computeChanges(before, after, fields) {
+  const changes = {};
+  const keys = fields || [...new Set([...Object.keys(before || {}), ...Object.keys(after || {})])];
+  for (const key of keys) {
+    const bVal = before?.[key];
+    const aVal = after?.[key];
+    if (JSON.stringify(bVal) !== JSON.stringify(aVal)) {
+      changes[key] = { before: bVal, after: aVal };
+    }
+  }
+  return Object.keys(changes).length ? changes : undefined;
+}
+
+function getTargetLabel(item, collection) {
+  const labelMap = {
+    batches: ['name', 'batchNo'],
+    requests: ['showName', 'venue'],
+    wastes: ['code', 'title'],
+    stocktakes: ['code', 'title'],
+    suppliers: ['name'],
+    cabinets: ['code', 'area'],
+    projects: ['name', 'venue']
+  };
+  const fields = labelMap[collection] || ['id'];
+  return fields.map((f) => item?.[f]).filter(Boolean).join(' / ') || item?.id || '';
+}
+
+function writeAuditLog(db, options) {
+  const { actionType, collection, targetId, targetItem, beforeItem, changes, note, operator } = options;
+  if (!db[AUDIT_COLLECTION]) db[AUDIT_COLLECTION] = [];
+  const item = targetItem || beforeItem;
+  const log = {
+    id: `${AUDIT_COLLECTION}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    actionType,
+    targetCollection: collection,
+    targetId,
+    targetLabel: getTargetLabel(item, collection),
+    changes: changes || computeChanges(beforeItem, targetItem),
+    note: note || '',
+    operator: operator || '',
+    createdAt: new Date().toISOString()
+  };
+  db[AUDIT_COLLECTION].unshift(log);
+  return log;
+}
+
+function collectionLabel(collection) {
+  return config.collections?.[collection]?.label || collection;
+}
+
 app.get('/api/config', (req, res) => {
   res.json(config);
 });
@@ -79,6 +131,13 @@ app.post('/api/:collection', async (req, res) => {
   }
 
   db[collection].push(item);
+  writeAuditLog(db, {
+    actionType: '创建',
+    collection,
+    targetId: item.id,
+    targetItem: item,
+    note: req.body.note || req.body.memo || ''
+  });
   await writeDb(db);
   res.status(201).json(item);
 });
@@ -109,6 +168,7 @@ app.patch('/api/:collection/:id', async (req, res) => {
     }
   }
 
+  const beforeItem = { ...item };
   const historyAction = req.body.historyAction;
   delete req.body.historyAction;
   Object.assign(item, req.body, { updatedAt: new Date().toISOString() });
@@ -116,6 +176,16 @@ app.patch('/api/:collection/:id', async (req, res) => {
   if (historyAction || req.body.note || req.body.memo || req.body.status) {
     item.history.unshift(stamp(historyAction || req.body.status || '更新', req.body.note || req.body.memo || ''));
   }
+  const trackedFields = ['status', 'quantity', 'note', 'memo', 'name', 'code', 'title'];
+  writeAuditLog(db, {
+    actionType: historyAction || '更新',
+    collection,
+    targetId: id,
+    targetItem: item,
+    beforeItem,
+    changes: computeChanges(beforeItem, item, trackedFields),
+    note: req.body.note || req.body.memo || ''
+  });
   await writeDb(db);
   res.json(item);
 });
@@ -133,9 +203,16 @@ app.delete('/api/:collection/:id', async (req, res) => {
     }
   }
 
-  const before = db[collection].length;
+  const item = db[collection].find((entry) => entry.id === id);
+  if (!item) return res.status(404).json({ error: 'not found' });
+  writeAuditLog(db, {
+    actionType: '删除',
+    collection,
+    targetId: id,
+    beforeItem: item,
+    note: '删除记录'
+  });
   db[collection] = db[collection].filter((entry) => entry.id !== id);
-  if (db[collection].length === before) return res.status(404).json({ error: 'not found' });
   await writeDb(db);
   res.status(204).end();
 });
@@ -148,8 +225,41 @@ app.post('/api/action/:actionId/:id', async (req, res) => {
   if (!item) return res.status(404).json({ error: 'not found' });
   const preCheck = preActionCheck(db, action, item);
   if (preCheck.error) return res.status(409).json({ error: preCheck.error });
+
+  const beforeItem = { ...item };
+  let beforeRelated = null;
+  let relatedItem = null;
+  if (action.relation) {
+    relatedItem = findRelated(db, action.relation, item);
+    if (relatedItem) beforeRelated = { ...relatedItem };
+  }
+
   const result = runAction(db, action, item);
   if (result.error) return res.status(409).json({ error: result.error });
+
+  writeAuditLog(db, {
+    actionType: action.label,
+    collection: action.collection,
+    targetId: item.id,
+    targetItem: item,
+    beforeItem,
+    note: action.note || '状态流转'
+  });
+
+  if (action.relation && relatedItem && beforeRelated) {
+    const relChanged = JSON.stringify(relatedItem) !== JSON.stringify(beforeRelated);
+    if (relChanged) {
+      writeAuditLog(db, {
+        actionType: action.label + '(关联)',
+        collection: action.relation.collection,
+        targetId: relatedItem.id,
+        targetItem: relatedItem,
+        beforeItem: beforeRelated,
+        note: `由 ${collectionLabel(action.collection)} 操作触发：${action.label}`
+      });
+    }
+  }
+
   await writeDb(db);
   res.json(result.item);
 });
@@ -294,6 +404,15 @@ app.post('/api/stocktakes/:id/confirm', async (req, res) => {
   noteParts.push('已同步更新批次库存');
   stocktake.history.unshift(stamp('确认', noteParts.join('，')));
 
+  writeAuditLog(db, {
+    actionType: '盘点确认',
+    collection: 'stocktakes',
+    targetId: stocktake.id,
+    targetItem: stocktake,
+    note: noteParts.join('，'),
+    operator: confirmedBy
+  });
+
   await writeDb(db);
   res.json(stocktake);
 });
@@ -317,6 +436,9 @@ app.post('/api/wastes/:id/approve', async (req, res) => {
   const now = new Date().toISOString();
   const approver = req.body.approver || '系统';
 
+  const beforeWaste = { ...waste };
+  const beforeBatch = { ...batch };
+
   waste.status = '待处置';
   waste.approver = approver;
   waste.approvedAt = now;
@@ -327,6 +449,25 @@ app.post('/api/wastes/:id/approve', async (req, res) => {
   batch.updatedAt = now;
   batch.history = batch.history || [];
   batch.history.unshift(stamp('报废审批通过', `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`));
+
+  writeAuditLog(db, {
+    actionType: '审批通过',
+    collection: 'wastes',
+    targetId: waste.id,
+    targetItem: waste,
+    beforeItem: beforeWaste,
+    note: `审批人：${approver}，报废数量：${wasteQty}${batch.unit || ''}`,
+    operator: approver
+  });
+
+  writeAuditLog(db, {
+    actionType: '报废审批(关联)',
+    collection: 'batches',
+    targetId: batch.id,
+    targetItem: batch,
+    beforeItem: beforeBatch,
+    note: `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`
+  });
 
   await writeDb(db);
   res.json(waste);
@@ -356,6 +497,9 @@ app.post('/api/wastes/:id/dispose', async (req, res) => {
 
   const now = new Date().toISOString();
 
+  const beforeWaste = { ...waste };
+  const beforeBatch = { ...batch };
+
   waste.actualQuantity = actualQty;
   waste.disposalMethod = disposalMethod;
   waste.witness = witness;
@@ -377,6 +521,25 @@ app.post('/api/wastes/:id/dispose', async (req, res) => {
     noteParts.push('库存清零，批次状态更新为已报废');
   }
   batch.history.unshift(stamp('报废扣减', noteParts.join('，')));
+
+  writeAuditLog(db, {
+    actionType: '确认处置',
+    collection: 'wastes',
+    targetId: waste.id,
+    targetItem: waste,
+    beforeItem: beforeWaste,
+    note: `实际处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}`,
+    operator
+  });
+
+  writeAuditLog(db, {
+    actionType: '报废扣减(关联)',
+    collection: 'batches',
+    targetId: batch.id,
+    targetItem: batch,
+    beforeItem: beforeBatch,
+    note: noteParts.join('，')
+  });
 
   await writeDb(db);
   res.json(waste);
@@ -406,12 +569,24 @@ app.patch('/api/stocktakes/:id/items', async (req, res) => {
     };
   });
 
+  const beforeStocktake = { ...stocktake };
+
   stocktake.status = stocktake.items.length > 0 ? '录入中' : '草稿';
   stocktake.updatedAt = now;
   stocktake.history = stocktake.history || [];
 
   const diffItems = stocktake.items.filter((i) => i.difference !== 0).length;
   stocktake.history.unshift(stamp('录入', `录入${stocktake.items.length}个批次，差异${diffItems}项`));
+
+  writeAuditLog(db, {
+    actionType: '盘点录入',
+    collection: 'stocktakes',
+    targetId: stocktake.id,
+    targetItem: stocktake,
+    beforeItem: beforeStocktake,
+    note: `录入${stocktake.items.length}个批次，差异${diffItems}项`,
+    operator: operator || stocktake.operator
+  });
 
   await writeDb(db);
   res.json(stocktake);
