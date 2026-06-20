@@ -98,12 +98,12 @@ function computedFieldValue(field, item) {
   return '-';
 }
 
-function computeCabinetOccupancy(cabinetId) {
+function computeCabinetOccupancy(cabinetId, excludeBatchId = null) {
   const cabinet = state.db.cabinets?.find((c) => c.id === cabinetId);
   if (!cabinet) return null;
   const capacity = Number(cabinet.capacity || 0);
   const occupiedQuantity = (state.db.batches || [])
-    .filter((b) => b.cabinetId === cabinetId && b.status !== '已报废')
+    .filter((b) => b.cabinetId === cabinetId && b.id !== excludeBatchId && b.status !== '已报废')
     .reduce((sum, b) => sum + Number(b.quantity || 0), 0);
   return {
     cabinetId,
@@ -143,10 +143,10 @@ function optionList(items, labelFields) {
   }).join('');
 }
 
-function cabinetOptionList(collection, labelFields) {
+function cabinetOptionList(collection, labelFields, excludeBatchId = null) {
   const items = state.db[collection] || [];
   return items.map((item) => {
-    const occ = computeCabinetOccupancy(item.id);
+    const occ = computeCabinetOccupancy(item.id, excludeBatchId);
     const label = cabinetOptionLabel(item, occ);
     const disabled = occ?.isOverLimit ? 'disabled' : '';
     return `<option value="${item.id}" ${disabled} data-capacity='${JSON.stringify(occ || {})}'>${escapeHtml(label)}</option>`;
@@ -1630,13 +1630,14 @@ function renderCabinetCapacityInfo(form) {
 
   const cabinetId = cabinetSelect.value;
   const qty = Number(qtyInput?.value || 0);
+  const editId = form.dataset.editId;
 
   if (!cabinetId) {
     capacityInfo.innerHTML = '';
     return;
   }
 
-  const occ = computeCabinetOccupancy(cabinetId);
+  const occ = computeCabinetOccupancy(cabinetId, editId);
   if (!occ) {
     capacityInfo.innerHTML = '';
     return;
@@ -1651,16 +1652,19 @@ function renderCabinetCapacityInfo(form) {
   const tone = willOver ? 'bad' : willNearFull ? 'warn' : 'ok';
   const rate = Math.min(Math.round((newOccupied / occ.capacity) * 100), 100);
 
+  const diffLabel = !editId ? `新增${qty}` : qty >= 0 ? `调整+${qty}` : `调整${qty}`;
+  const diffPillLabel = !editId ? `本次新增 +${qty}` : qty >= 0 ? `本次调整 +${qty}` : `本次调整 ${qty}`;
+
   const overTipHtml = willOver
-    ? `<div class="capacity-over-tip">⚠️ 容量不足！本次新增${qty}后将超出 ${overAmount}，请减少数量或选择其他柜位</div>`
+    ? `<div class="capacity-over-tip">⚠️ 容量不足！本次${diffLabel}后将超出 ${overAmount}，请减少数量或选择其他柜位</div>`
     : willNearFull
-    ? `<div class="capacity-near-tip">⚡ 本次新增后柜位即将满载（占用率${rate}%），请合理分配库存</div>`
+    ? `<div class="capacity-near-tip">⚡ 本次${diffLabel}后柜位即将满载（占用率${rate}%），请合理分配库存</div>`
     : '';
 
-  const afterLabelHtml = qty > 0
+  const afterLabelHtml = qty !== 0 || editId
     ? `
       <div class="capacity-after-label">
-        <span class="pill" style="background:rgba(17,97,92,.1);color:var(--accent);font-size:11px;">本次新增 +${qty}</span>
+        <span class="pill" style="background:rgba(17,97,92,.1);color:var(--accent);font-size:11px;">${diffPillLabel}</span>
       </div>
     `
     : '';
@@ -1677,7 +1681,7 @@ function renderCabinetCapacityInfo(form) {
         </div>
         <div class="capacity-labels capacity-labels-sm">
           <span>已占用 <strong>${occ.occupiedQuantity}</strong></span>
-          <span>新增后 <strong class="${willOver ? 'cap-bad' : ''}">${newOccupied}</strong> / ${occ.capacity}</span>
+          <span>${editId ? '调整后' : '新增后'} <strong class="${willOver ? 'cap-bad' : ''}">${newOccupied}</strong> / ${occ.capacity}</span>
           <span class="${willOver ? 'cap-bad' : (willNearFull ? 'cap-warn' : 'cap-ok')}">
             剩余 <strong>${Math.max(newRemaining, 0)}</strong>
           </span>
@@ -2443,30 +2447,14 @@ document.addEventListener('submit', async (e) => {
     const data = collectFormData(crudForm);
 
     if (collection === 'batches' && data.cabinetId) {
-      const occ = computeCabinetOccupancy(data.cabinetId);
       const qty = Number(data.quantity || 0);
-      if (occ && qty > 0) {
+      const occ = computeCabinetOccupancy(data.cabinetId, editId);
+      if (occ) {
         const newOccupied = occ.occupiedQuantity + qty;
-        if (!editId && newOccupied > occ.capacity) {
-          toast(`柜位容量不足！容量${occ.capacity}，已占用${occ.occupiedQuantity}，本次${qty}，超出${newOccupied - occ.capacity}`);
+        if (newOccupied > occ.capacity) {
+          const diffLabel = !editId ? `本次${qty}` : qty >= 0 ? `本次调整+${qty}` : `本次调整${qty}`;
+          toast(`柜位容量不足！容量${occ.capacity}，已占用${occ.occupiedQuantity}，${diffLabel}，超出${newOccupied - occ.capacity}`);
           return;
-        }
-        if (editId) {
-          const before = state.db.batches?.find(b => b.id === editId);
-          const beforeCabinet = before?.cabinetId;
-          const beforeQty = Number(before?.quantity || 0);
-          if (data.cabinetId !== beforeCabinet) {
-            if (newOccupied > occ.capacity) {
-              toast(`柜位容量不足！容量${occ.capacity}，已占用${occ.occupiedQuantity}，本次${qty}，超出${newOccupied - occ.capacity}`);
-              return;
-            }
-          } else if (qty > beforeQty) {
-            const diff = qty - beforeQty;
-            if (occ.occupiedQuantity - beforeQty + qty > occ.capacity) {
-              toast(`柜位容量不足！容量${occ.capacity}，调整后超出${(occ.occupiedQuantity - beforeQty + qty) - occ.capacity}`);
-              return;
-            }
-          }
         }
       }
     }

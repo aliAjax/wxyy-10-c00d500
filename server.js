@@ -259,16 +259,10 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
 
   if (collection === 'batches') {
     const newCabinetId = req.body.cabinetId !== undefined ? req.body.cabinetId : item.cabinetId;
-    const oldCabinetId = item.cabinetId;
     const newQty = req.body.quantity !== undefined ? Number(req.body.quantity || 0) : Number(item.quantity || 0);
-    const oldQty = Number(item.quantity || 0);
 
-    if (newCabinetId && newCabinetId !== oldCabinetId) {
+    if (newCabinetId) {
       const capCheck = checkCabinetCapacity(db, newCabinetId, newQty, item.id);
-      if (!capCheck.ok) return res.status(409).json({ error: capCheck.error, capacityInfo: capCheck.occupancy });
-    } else if (newCabinetId && newCabinetId === oldCabinetId && newQty > oldQty) {
-      const diffQty = newQty - oldQty;
-      const capCheck = checkCabinetCapacity(db, newCabinetId, diffQty, item.id);
       if (!capCheck.ok) return res.status(409).json({ error: capCheck.error, capacityInfo: capCheck.occupancy });
     }
   }
@@ -1092,16 +1086,22 @@ function checkCabinetCapacity(db, cabinetId, addQuantity, excludeBatchId = null)
   const occ = computeCabinetOccupancy(db, cabinetId, excludeBatchId);
   if (!occ) return { ok: true };
   const qty = Number(addQuantity || 0);
-  if (qty <= 0) return { ok: true, occupancy: occ };
   const newOccupied = occ.occupiedQuantity + qty;
+  const finalOccupancy = {
+    ...occ,
+    occupiedQuantity: newOccupied,
+    remainingQuantity: occ.capacity - newOccupied,
+    occupancyRate: occ.capacity > 0 ? Math.round((newOccupied / occ.capacity) * 100) : 0
+  };
   if (newOccupied > occ.capacity) {
+    const diff = qty >= 0 ? `本次新增${qty}` : `本次调整${qty}`;
     return {
       ok: false,
-      error: `柜位「${occ.cabinetCode}（${occ.cabinetArea}）」容量不足：容量${occ.capacity}，已占用${occ.occupiedQuantity}，本次新增${qty}，合计将占用${newOccupied}，超出${newOccupied - occ.capacity}`,
-      occupancy: { ...occ, occupiedQuantity: newOccupied, remainingQuantity: occ.capacity - newOccupied, occupancyRate: occ.capacity > 0 ? Math.round((newOccupied / occ.capacity) * 100) : 0 }
+      error: `柜位「${occ.cabinetCode}（${occ.cabinetArea}）」容量不足：容量${occ.capacity}，已占用${occ.occupiedQuantity}，${diff}，合计将占用${newOccupied}，超出${newOccupied - occ.capacity}`,
+      occupancy: finalOccupancy
     };
   }
-  return { ok: true, occupancy: { ...occ, occupiedQuantity: newOccupied, remainingQuantity: occ.capacity - newOccupied, occupancyRate: occ.capacity > 0 ? Math.round((newOccupied / occ.capacity) * 100) : 0 } };
+  return { ok: true, occupancy: finalOccupancy };
 }
 
 app.get('/api/cabinets/occupancy', async (req, res) => {
