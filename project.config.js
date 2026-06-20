@@ -2,6 +2,73 @@ module.exports = {
   port: 3910,
   title: '舞台烟火药剂出入库',
   lede: '把药剂批次、演出领用审批、出库回库和报废记录串起来，避免过期、错级和库存不足的危险流转。',
+  users: [
+    { id: 'user-staff-1', username: 'librarian', name: '张伟', role: 'librarian', roleLabel: '库管员' },
+    { id: 'user-safety-1', username: 'safety', name: '李强', role: 'safety', roleLabel: '安全负责人' },
+    { id: 'user-show-1', username: 'show', name: '王芳', role: 'show', roleLabel: '演出负责人' }
+  ],
+  roles: {
+    librarian: { label: '库管员', color: '#11615c' },
+    safety: { label: '安全负责人', color: '#a13d3d' },
+    show: { label: '演出负责人', color: '#a35c00' }
+  },
+  permissions: {
+    create: {
+      batches: ['librarian'],
+      requests: ['show'],
+      wastes: ['librarian', 'show'],
+      stocktakes: ['librarian'],
+      suppliers: ['librarian'],
+      cabinets: ['librarian'],
+      projects: ['show', 'librarian']
+    },
+    update: {
+      batches: ['librarian', 'safety'],
+      requests: ['show', 'safety'],
+      wastes: ['librarian', 'safety'],
+      stocktakes: ['librarian'],
+      suppliers: ['librarian'],
+      cabinets: ['librarian'],
+      projects: ['show', 'librarian']
+    },
+    delete: {
+      batches: ['librarian'],
+      requests: ['show', 'safety'],
+      wastes: ['librarian', 'safety'],
+      stocktakes: ['librarian'],
+      suppliers: ['librarian'],
+      cabinets: ['librarian'],
+      projects: ['show', 'librarian']
+    },
+    action: {
+      'batch-lock': ['safety'],
+      'batch-ok': ['safety', 'librarian'],
+      'batch-waste': ['safety'],
+      'request-approve': ['safety'],
+      'request-reject': ['safety'],
+      'request-issue': ['librarian'],
+      'request-return': ['librarian'],
+      'supplier-active': ['librarian'],
+      'supplier-pause': ['librarian'],
+      'supplier-expired': ['librarian'],
+      'cabinet-free': ['librarian'],
+      'cabinet-inuse': ['librarian'],
+      'cabinet-full': ['librarian'],
+      'cabinet-disable': ['librarian'],
+      'project-prepare': ['show', 'librarian'],
+      'project-ongoing': ['show', 'librarian'],
+      'project-complete': ['show', 'librarian'],
+      'project-cancel': ['show', 'safety'],
+      'waste-reject': ['safety']
+    },
+    special: {
+      'wastes-approve': ['safety'],
+      'wastes-dispose': ['librarian'],
+      'stocktakes-items': ['librarian'],
+      'stocktakes-confirm': ['librarian', 'safety'],
+      'batches-import': ['librarian']
+    }
+  },
   tones: {
     '可用': 'ok',
     '已回库': 'ok',

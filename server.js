@@ -10,6 +10,49 @@ const DB_FILE = path.join(__dirname, 'data', 'db.json');
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+const USER_HEADER = 'x-current-user-id';
+const SYSTEM_IMPORT_LABEL = '系统导入';
+
+function getUserById(userId) {
+  return config.users?.find((u) => u.id === userId) || null;
+}
+
+function extractCurrentUser(req) {
+  const userId = req.headers[USER_HEADER] || req.body?.currentUserId;
+  if (!userId) return null;
+  return getUserById(userId);
+}
+
+function requireUser(req, res, next) {
+  const user = extractCurrentUser(req);
+  if (!user) return res.status(401).json({ error: '未登录或用户不存在，请先选择当前用户' });
+  req.currentUser = user;
+  next();
+}
+
+function hasPermission(user, permType, key) {
+  if (!user || !config.permissions) return false;
+  const allowed = config.permissions[permType]?.[key];
+  if (!allowed) return true;
+  return allowed.includes(user.role);
+}
+
+function checkPermission(user, permType, key, res) {
+  if (!hasPermission(user, permType, key)) {
+    const roleLabel = config.roles?.[user?.role]?.label || user?.role || '未知角色';
+    const permLabel = {
+      create: '创建',
+      update: '编辑',
+      delete: '删除',
+      action: '操作',
+      special: '执行'
+    }[permType] || permType;
+    res.status(403).json({ error: `权限不足：${roleLabel}无权${permLabel}该内容` });
+    return false;
+  }
+  return true;
+}
+
 async function readDb() {
   const raw = await fs.readFile(DB_FILE, 'utf8');
   return JSON.parse(raw);
@@ -19,11 +62,14 @@ async function writeDb(db) {
   await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2) + '\n');
 }
 
-function stamp(action, note) {
+function stamp(action, note, operator) {
+  const opLabel = operator ? `${operator.name}（${operator.roleLabel}）` : SYSTEM_IMPORT_LABEL;
   return {
     at: new Date().toISOString(),
     action,
-    note: note || ''
+    note: note || '',
+    operator: operator ? { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel } : null,
+    operatorLabel: opLabel
   };
 }
 
@@ -60,10 +106,18 @@ function getTargetLabel(item, collection) {
   return fields.map((f) => item?.[f]).filter(Boolean).join(' / ') || item?.id || '';
 }
 
+function operatorDisplayName(operator) {
+  if (!operator) return SYSTEM_IMPORT_LABEL;
+  if (typeof operator === 'string') return operator || SYSTEM_IMPORT_LABEL;
+  if (operator.name && operator.roleLabel) return `${operator.name}（${operator.roleLabel}）`;
+  return operator.name || operator.id || SYSTEM_IMPORT_LABEL;
+}
+
 function writeAuditLog(db, options) {
   const { actionType, collection, targetId, targetItem, beforeItem, changes, note, operator } = options;
   if (!db[AUDIT_COLLECTION]) db[AUDIT_COLLECTION] = [];
   const item = targetItem || beforeItem;
+  const opLabel = operatorDisplayName(operator);
   const log = {
     id: `${AUDIT_COLLECTION}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
     actionType,
@@ -72,7 +126,8 @@ function writeAuditLog(db, options) {
     targetLabel: getTargetLabel(item, collection),
     changes: changes || computeChanges(beforeItem, targetItem),
     note: note || '',
-    operator: operator || '',
+    operator: opLabel,
+    operatorInfo: operator && typeof operator === 'object' && operator.id ? operator : null,
     createdAt: new Date().toISOString()
   };
   db[AUDIT_COLLECTION].unshift(log);
@@ -95,12 +150,15 @@ app.get('/api/db', async (req, res) => {
   res.json(db);
 });
 
-app.post('/api/:collection', async (req, res) => {
+app.post('/api/:collection', requireUser, async (req, res) => {
   const db = await readDb();
   const { collection } = req.params;
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
 
+  if (!checkPermission(req.currentUser, 'create', collection, res)) return;
+
   const now = new Date().toISOString();
+  const operator = req.currentUser;
   let item;
 
   if (collection === 'wastes') {
@@ -118,15 +176,18 @@ app.post('/api/:collection', async (req, res) => {
       actualQuantity: 0,
       createdAt: now,
       updatedAt: now,
-      history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`)]
+      createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+      history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`, operator)]
     };
   } else {
+    const defaultNote = req.body.note || req.body.memo || '';
     item = {
       id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
       ...req.body,
       createdAt: now,
       updatedAt: now,
-      history: [stamp('创建', req.body.note || req.body.memo || '')]
+      createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+      history: [stamp('创建', defaultNote, operator)]
     };
   }
 
@@ -136,18 +197,24 @@ app.post('/api/:collection', async (req, res) => {
     collection,
     targetId: item.id,
     targetItem: item,
-    note: req.body.note || req.body.memo || ''
+    note: req.body.note || req.body.memo || '',
+    operator
   });
   await writeDb(db);
   res.status(201).json(item);
 });
 
-app.patch('/api/:collection/:id', async (req, res) => {
+app.patch('/api/:collection/:id', requireUser, async (req, res) => {
   const db = await readDb();
   const { collection, id } = req.params;
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
+
+  if (!checkPermission(req.currentUser, 'update', collection, res)) return;
+
   const item = db[collection].find((entry) => entry.id === id);
   if (!item) return res.status(404).json({ error: 'not found' });
+
+  const operator = req.currentUser;
 
   if (collection === 'wastes') {
     const protectedFields = ['status', 'actualQuantity', 'approver', 'approvedAt', 'disposedBy', 'disposedAt', 'disposalMethod', 'witness'];
@@ -174,7 +241,7 @@ app.patch('/api/:collection/:id', async (req, res) => {
   Object.assign(item, req.body, { updatedAt: new Date().toISOString() });
   item.history = item.history || [];
   if (historyAction || req.body.note || req.body.memo || req.body.status) {
-    item.history.unshift(stamp(historyAction || req.body.status || '更新', req.body.note || req.body.memo || ''));
+    item.history.unshift(stamp(historyAction || req.body.status || '更新', req.body.note || req.body.memo || '', operator));
   }
   const trackedFields = ['status', 'quantity', 'note', 'memo', 'name', 'code', 'title'];
   writeAuditLog(db, {
@@ -184,16 +251,21 @@ app.patch('/api/:collection/:id', async (req, res) => {
     targetItem: item,
     beforeItem,
     changes: computeChanges(beforeItem, item, trackedFields),
-    note: req.body.note || req.body.memo || ''
+    note: req.body.note || req.body.memo || '',
+    operator
   });
   await writeDb(db);
   res.json(item);
 });
 
-app.delete('/api/:collection/:id', async (req, res) => {
+app.delete('/api/:collection/:id', requireUser, async (req, res) => {
   const db = await readDb();
   const { collection, id } = req.params;
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
+
+  if (!checkPermission(req.currentUser, 'delete', collection, res)) return;
+
+  const operator = req.currentUser;
 
   if (collection === 'wastes') {
     const item = db[collection].find((entry) => entry.id === id);
@@ -210,17 +282,22 @@ app.delete('/api/:collection/:id', async (req, res) => {
     collection,
     targetId: id,
     beforeItem: item,
-    note: '删除记录'
+    note: '删除记录',
+    operator
   });
   db[collection] = db[collection].filter((entry) => entry.id !== id);
   await writeDb(db);
   res.status(204).end();
 });
 
-app.post('/api/action/:actionId/:id', async (req, res) => {
+app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
   const db = await readDb();
   const action = config.actions.find((entry) => entry.id === req.params.actionId);
   if (!action) return res.status(404).json({ error: 'unknown action' });
+
+  if (!checkPermission(req.currentUser, 'action', action.id, res)) return;
+
+  const operator = req.currentUser;
   const item = db[action.collection]?.find((entry) => entry.id === req.params.id);
   if (!item) return res.status(404).json({ error: 'not found' });
   const preCheck = preActionCheck(db, action, item);
@@ -234,7 +311,7 @@ app.post('/api/action/:actionId/:id', async (req, res) => {
     if (relatedItem) beforeRelated = { ...relatedItem };
   }
 
-  const result = runAction(db, action, item);
+  const result = runAction(db, action, item, operator);
   if (result.error) return res.status(409).json({ error: result.error });
 
   writeAuditLog(db, {
@@ -243,7 +320,8 @@ app.post('/api/action/:actionId/:id', async (req, res) => {
     targetId: item.id,
     targetItem: item,
     beforeItem,
-    note: action.note || '状态流转'
+    note: action.note || '状态流转',
+    operator
   });
 
   if (action.relation && relatedItem && beforeRelated) {
@@ -255,7 +333,8 @@ app.post('/api/action/:actionId/:id', async (req, res) => {
         targetId: relatedItem.id,
         targetItem: relatedItem,
         beforeItem: beforeRelated,
-        note: `由 ${collectionLabel(action.collection)} 操作触发：${action.label}`
+        note: `由 ${collectionLabel(action.collection)} 操作触发：${action.label}`,
+        operator
       });
     }
   }
@@ -297,7 +376,7 @@ function findRelated(db, relation, item) {
   return db[relation.collection]?.find((entry) => entry.id === item[relation.localKey]);
 }
 
-function runAction(db, action, item) {
+function runAction(db, action, item, operator) {
   const related = action.relation ? findRelated(db, action.relation, item) : null;
   const context = { item, related };
   const levelRank = { '低': 1, '中': 2, '高': 3 };
@@ -319,7 +398,7 @@ function runAction(db, action, item) {
     setValue(target, patch.field, next);
     target.updatedAt = new Date().toISOString();
     target.history = target.history || [];
-    target.history.unshift(stamp(action.label, action.note || '状态流转'));
+    target.history.unshift(stamp(action.label, action.note || '状态流转', operator));
   }
   for (const delta of action.deltas || []) {
     const target = delta.target === 'related' ? related : item;
@@ -331,12 +410,14 @@ function runAction(db, action, item) {
     setValue(target, delta.field, current + amount);
     target.updatedAt = new Date().toISOString();
     target.history = target.history || [];
-    target.history.unshift(stamp(action.label, action.note || '数量调整'));
+    target.history.unshift(stamp(action.label, action.note || '数量调整', operator));
   }
   return { item };
 }
 
-app.post('/api/stocktakes/:id/confirm', async (req, res) => {
+app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'stocktakes-confirm', res)) return;
+
   const db = await readDb();
   const { id } = req.params;
   const stocktake = db.stocktakes?.find((entry) => entry.id === id);
@@ -346,8 +427,9 @@ app.post('/api/stocktakes/:id/confirm', async (req, res) => {
     return res.status(409).json({ error: '盘点单还没有录入任何批次，请先完成录入' });
   }
 
+  const operator = req.currentUser;
   const now = new Date().toISOString();
-  const confirmedBy = req.body.confirmedBy || stocktake.operator || '系统';
+  const confirmedBy = `${operator.name}（${operator.roleLabel}）`;
 
   let surplusCount = 0;
   let deficitCount = 0;
@@ -371,7 +453,7 @@ app.post('/api/stocktakes/:id/confirm', async (req, res) => {
       batch.history = batch.history || [];
       const diffText = diff > 0 ? `盘盈+${diff}${batch.unit || ''}` : `盘亏${diff}${batch.unit || ''}`;
       const remarkText = item.remark ? `，原因：${item.remark}` : '';
-      batch.history.unshift(stamp('盘点调整', `${diffText}，盘点单：${stocktake.code || stocktake.id}${remarkText}`));
+      batch.history.unshift(stamp('盘点调整', `${diffText}，盘点单：${stocktake.code || stocktake.id}${remarkText}`, operator));
 
       if (diff > 0) {
         surplusCount++;
@@ -402,7 +484,7 @@ app.post('/api/stocktakes/:id/confirm', async (req, res) => {
   if (surplusCount) noteParts.push(`盘盈${surplusCount}项(+${surplusQty})`);
   if (deficitCount) noteParts.push(`盘亏${deficitCount}项(-${deficitQty})`);
   noteParts.push('已同步更新批次库存');
-  stocktake.history.unshift(stamp('确认', noteParts.join('，')));
+  stocktake.history.unshift(stamp('确认', noteParts.join('，'), operator));
 
   writeAuditLog(db, {
     actionType: '盘点确认',
@@ -410,14 +492,16 @@ app.post('/api/stocktakes/:id/confirm', async (req, res) => {
     targetId: stocktake.id,
     targetItem: stocktake,
     note: noteParts.join('，'),
-    operator: confirmedBy
+    operator
   });
 
   await writeDb(db);
   res.json(stocktake);
 });
 
-app.post('/api/wastes/:id/approve', async (req, res) => {
+app.post('/api/wastes/:id/approve', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'wastes-approve', res)) return;
+
   const db = await readDb();
   const { id } = req.params;
   const waste = db.wastes?.find((entry) => entry.id === id);
@@ -433,22 +517,24 @@ app.post('/api/wastes/:id/approve', async (req, res) => {
   if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
   if (wasteQty > stockQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过当前库存(${stockQty})` });
 
+  const operator = req.currentUser;
   const now = new Date().toISOString();
-  const approver = req.body.approver || '系统';
+  const approver = `${operator.name}（${operator.roleLabel}）`;
 
   const beforeWaste = { ...waste };
   const beforeBatch = { ...batch };
 
   waste.status = '待处置';
   waste.approver = approver;
+  waste.approverInfo = { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel };
   waste.approvedAt = now;
   waste.updatedAt = now;
   waste.history = waste.history || [];
-  waste.history.unshift(stamp('审批通过', `审批人：${approver}，报废数量：${wasteQty}${batch.unit || ''}`));
+  waste.history.unshift(stamp('审批通过', `审批人：${approver}，报废数量：${wasteQty}${batch.unit || ''}`, operator));
 
   batch.updatedAt = now;
   batch.history = batch.history || [];
-  batch.history.unshift(stamp('报废审批通过', `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`));
+  batch.history.unshift(stamp('报废审批通过', `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`, operator));
 
   writeAuditLog(db, {
     actionType: '审批通过',
@@ -457,7 +543,7 @@ app.post('/api/wastes/:id/approve', async (req, res) => {
     targetItem: waste,
     beforeItem: beforeWaste,
     note: `审批人：${approver}，报废数量：${wasteQty}${batch.unit || ''}`,
-    operator: approver
+    operator
   });
 
   writeAuditLog(db, {
@@ -466,14 +552,17 @@ app.post('/api/wastes/:id/approve', async (req, res) => {
     targetId: batch.id,
     targetItem: batch,
     beforeItem: beforeBatch,
-    note: `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`
+    note: `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`,
+    operator
   });
 
   await writeDb(db);
   res.json(waste);
 });
 
-app.post('/api/wastes/:id/dispose', async (req, res) => {
+app.post('/api/wastes/:id/dispose', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'wastes-dispose', res)) return;
+
   const db = await readDb();
   const { id } = req.params;
   const waste = db.wastes?.find((entry) => entry.id === id);
@@ -487,7 +576,8 @@ app.post('/api/wastes/:id/dispose', async (req, res) => {
   const actualQty = Number(req.body.actualQuantity ?? waste.quantity);
   const disposalMethod = req.body.disposalMethod || waste.disposalMethod || '';
   const witness = req.body.witness || waste.witness || '';
-  const operator = req.body.operator || '系统';
+  const operator = req.currentUser;
+  const disposedBy = `${operator.name}（${operator.roleLabel}）`;
 
   const wasteQty = Number(waste.quantity || 0);
   const stockQty = Number(batch.quantity || 0);
@@ -505,10 +595,11 @@ app.post('/api/wastes/:id/dispose', async (req, res) => {
   waste.witness = witness;
   waste.status = '已处置';
   waste.disposedAt = now;
-  waste.disposedBy = operator;
+  waste.disposedBy = disposedBy;
+  waste.disposedByInfo = { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel };
   waste.updatedAt = now;
   waste.history = waste.history || [];
-  waste.history.unshift(stamp('确认处置', `实际处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}`));
+  waste.history.unshift(stamp('确认处置', `实际处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}`, operator));
 
   const newQty = stockQty - actualQty;
   batch.quantity = newQty;
@@ -520,7 +611,7 @@ app.post('/api/wastes/:id/dispose', async (req, res) => {
     batch.status = '已报废';
     noteParts.push('库存清零，批次状态更新为已报废');
   }
-  batch.history.unshift(stamp('报废扣减', noteParts.join('，')));
+  batch.history.unshift(stamp('报废扣减', noteParts.join('，'), operator));
 
   writeAuditLog(db, {
     actionType: '确认处置',
@@ -538,21 +629,25 @@ app.post('/api/wastes/:id/dispose', async (req, res) => {
     targetId: batch.id,
     targetItem: batch,
     beforeItem: beforeBatch,
-    note: noteParts.join('，')
+    note: noteParts.join('，'),
+    operator
   });
 
   await writeDb(db);
   res.json(waste);
 });
 
-app.patch('/api/stocktakes/:id/items', async (req, res) => {
+app.patch('/api/stocktakes/:id/items', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'stocktakes-items', res)) return;
+
   const db = await readDb();
   const { id } = req.params;
   const stocktake = db.stocktakes?.find((entry) => entry.id === id);
   if (!stocktake) return res.status(404).json({ error: '盘点单不存在' });
   if (stocktake.status === '已确认') return res.status(409).json({ error: '已确认的盘点单不能修改录入' });
 
-  const { items, operator } = req.body;
+  const operator = req.currentUser;
+  const { items } = req.body;
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items 必须是数组' });
 
   const now = new Date().toISOString();
@@ -578,7 +673,7 @@ app.patch('/api/stocktakes/:id/items', async (req, res) => {
   stocktake.history = stocktake.history || [];
 
   const diffItems = stocktake.items.filter((i) => i.difference !== 0).length;
-  stocktake.history.unshift(stamp('录入', `录入${stocktake.items.length}个批次，差异${diffItems}项`));
+  stocktake.history.unshift(stamp('录入', `录入${stocktake.items.length}个批次，差异${diffItems}项`, operator));
 
   const itemChanges = {};
   const beforeIds = new Set(beforeItems.map((i) => i.batchId));
@@ -617,7 +712,7 @@ app.patch('/api/stocktakes/:id/items', async (req, res) => {
     targetItem: stocktake,
     changes: itemChanges,
     note: `录入${stocktake.items.length}个批次，差异${diffItems}项`,
-    operator: operator || stocktake.operator
+    operator
   });
 
   await writeDb(db);
@@ -774,7 +869,9 @@ function validateBatchRow(row, headers, db, rowIndex) {
   };
 }
 
-app.post('/api/batches/import-preview', async (req, res) => {
+app.post('/api/batches/import-preview', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'batches-import', res)) return;
+
   try {
     const { csvText } = req.body;
     if (!csvText || !csvText.trim()) {
@@ -850,13 +947,16 @@ app.post('/api/batches/import-preview', async (req, res) => {
   }
 });
 
-app.post('/api/batches/import-confirm', async (req, res) => {
+app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'batches-import', res)) return;
+
   try {
-    const { rows, operator } = req.body;
+    const { rows } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: '没有可导入的数据' });
     }
 
+    const operator = req.currentUser;
     const db = await readDb();
     const now = new Date().toISOString();
     const imported = [];
@@ -883,7 +983,8 @@ app.post('/api/batches/import-confirm', async (req, res) => {
         status: rowData.status || '可用',
         createdAt: now,
         updatedAt: now,
-        history: [stamp('批量导入', `导入${rowData.quantity || 0}${rowData.unit || '罐'}，操作员：${operator || '系统'}`)]
+        createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+        history: [stamp('批量导入', `导入${rowData.quantity || 0}${rowData.unit || '罐'}`, operator)]
       };
 
       db.batches.push(item);
@@ -895,7 +996,7 @@ app.post('/api/batches/import-confirm', async (req, res) => {
         targetId: item.id,
         targetItem: item,
         note: `批量导入批次，数量：${rowData.quantity || 0}${rowData.unit || '罐'}`,
-        operator: operator || '系统'
+        operator
       });
     }
 

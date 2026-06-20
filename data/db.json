@@ -278,6 +278,39 @@
           "note": "入库20发"
         }
       ]
+    },
+    {
+      "id": "batches-1781960094304-2b039",
+      "name": "测试烟火B",
+      "category": "测试B",
+      "batchNo": "TEST-B002",
+      "safetyLevel": "低",
+      "quantity": 30,
+      "unit": "罐",
+      "expiresAt": "2026-12-31",
+      "status": "可用",
+      "createdAt": "2026-06-20T12:54:54.304Z",
+      "updatedAt": "2026-06-20T12:54:54.304Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T12:54:54.304Z",
+          "action": "创建",
+          "note": "",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
     }
   ],
   "requests": [
@@ -628,6 +661,82 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1781960094304-2d367",
+      "actionType": "创建",
+      "targetCollection": "batches",
+      "targetId": "batches-1781960094304-2b039",
+      "targetLabel": "测试烟火B / TEST-B002",
+      "changes": {
+        "id": {
+          "after": "batches-1781960094304-2b039"
+        },
+        "name": {
+          "after": "测试烟火B"
+        },
+        "category": {
+          "after": "测试B"
+        },
+        "batchNo": {
+          "after": "TEST-B002"
+        },
+        "safetyLevel": {
+          "after": "低"
+        },
+        "quantity": {
+          "after": 30
+        },
+        "unit": {
+          "after": "罐"
+        },
+        "expiresAt": {
+          "after": "2026-12-31"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-20T12:54:54.304Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T12:54:54.304Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T12:54:54.304Z",
+              "action": "创建",
+              "note": "",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T12:54:54.305Z"
+    },
     {
       "id": "auditLogs-seed-1",
       "actionType": "创建",

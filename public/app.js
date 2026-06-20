@@ -1,14 +1,24 @@
+const USER_STORAGE_KEY = 'wxyy_current_user_id';
+const SYSTEM_IMPORT_LABEL = '系统导入';
+
 const state = {
   config: null,
   db: {},
   activeTab: '',
+  activeView: '',
   expandedStocktake: null,
   stocktakeEdits: {},
   expandedWaste: null,
   wasteEdits: {},
   highlightRequestId: null,
   preselectedBatchId: null,
-  importPreview: null
+  importPreview: null,
+  currentUser: null,
+  filters: {},
+  expandedItems: {},
+  activeModal: null,
+  stocktakeInputs: {},
+  wasteDisposalInputs: {}
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -36,8 +46,12 @@ function toast(message) {
 }
 
 async function api(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (state.currentUser) {
+    headers['x-current-user-id'] = state.currentUser.id;
+  }
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options
   });
   if (!res.ok) {
@@ -112,11 +126,23 @@ function toneFor(value) {
   return state.config.tones?.[value] || '';
 }
 
+function historyOperatorLabel(entry) {
+  if (entry.operatorLabel) return entry.operatorLabel;
+  if (entry.operator && typeof entry.operator === 'object' && entry.operator.name) {
+    return entry.operator.roleLabel ? `${entry.operator.name}（${entry.operator.roleLabel}）` : entry.operator.name;
+  }
+  return SYSTEM_IMPORT_LABEL;
+}
+
 function historyHtml(item) {
   const history = item.history || [];
   if (!history.length) return '';
   return `<div class="history">${history.slice(0, 5).map((entry) => `
-    <div class="history-item"><span>${fmtDate(entry.at)}</span><span>${escapeHtml(entry.action)}${entry.note ? '：' + escapeHtml(entry.note) : ''}</span></div>
+    <div class="history-item">
+      <span>${fmtDate(entry.at)}</span>
+      <span class="history-op">[${escapeHtml(historyOperatorLabel(entry))}]</span>
+      <span>${escapeHtml(entry.action)}${entry.note ? '：' + escapeHtml(entry.note) : ''}</span>
+    </div>
   `).join('')}</div>`;
 }
 
@@ -128,11 +154,77 @@ function values(form, view) {
   return { ...view.defaults, ...payload };
 }
 
+function canCurrentUser(permType, key) {
+  if (!state.currentUser || !state.config?.permissions) return false;
+  const allowed = state.config.permissions[permType]?.[key];
+  if (!allowed) return true;
+  return allowed.includes(state.currentUser.role);
+}
+
+function currentUserLabelHtml() {
+  if (!state.currentUser) return '<span class="user-switcher-none">未选择用户</span>';
+  const u = state.currentUser;
+  const roleInfo = state.config.roles?.[u.role] || {};
+  const color = roleInfo.color || '#555';
+  return `
+    <span class="user-chip" style="--uc:${color};">
+      <span class="user-avatar" style="background:${color};">${escapeHtml(u.name?.[0] || 'U')}</span>
+      <span class="user-name">${escapeHtml(u.name)}</span>
+      <span class="user-role" style="color:${color};">${escapeHtml(u.roleLabel)}</span>
+      <span class="user-caret">▾</span>
+    </span>
+  `;
+}
+
+function userSwitcherDropdownHtml() {
+  const users = state.config?.users || [];
+  return `
+    <div id="userDropdown" class="user-dropdown hidden">
+      <div class="user-dropdown-title">切换当前用户</div>
+      <div class="user-list">
+        ${users.map((u) => {
+          const roleInfo = state.config.roles?.[u.role] || {};
+          const color = roleInfo.color || '#555';
+          const active = state.currentUser?.id === u.id ? 'active' : '';
+          return `
+            <button class="user-option ${active}" data-switch-user="${u.id}">
+              <span class="user-avatar" style="background:${color};">${escapeHtml(u.name?.[0] || 'U')}</span>
+              <span class="user-option-info">
+                <span class="user-option-name">${escapeHtml(u.name)}</span>
+                <span class="user-option-role" style="color:${color};">${escapeHtml(u.roleLabel)}</span>
+              </span>
+              ${active ? '<span class="user-check">✓</span>' : ''}
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderUserSwitcher() {
+  const container = $('#user-switcher-container');
+  if (!container) return;
+  container.innerHTML = currentUserLabelHtml() + userSwitcherDropdownHtml();
+}
+
+function switchUser(userId) {
+  const user = state.config?.users?.find((u) => u.id === userId);
+  if (!user) return;
+  state.currentUser = user;
+  try { localStorage.setItem(USER_STORAGE_KEY, user.id); } catch (e) {}
+  renderUserSwitcher();
+  render();
+  toast(`已切换到：${user.name}（${user.roleLabel}）`);
+}
+
 function renderTabs() {
-  $('#tabs').innerHTML = state.config.views.map((view, index) => `
-    <button class="tab${index === 0 ? ' active' : ''}" data-tab="${view.id}">${escapeHtml(view.label)}</button>
+  const active = state.activeTab || state.activeView || state.config.views[0].id;
+  state.activeTab = active;
+  state.activeView = active;
+  $('#tabs').innerHTML = state.config.views.map((view) => `
+    <button class="tab${view.id === active ? ' active' : ''}" data-tab="${view.id}">${escapeHtml(view.label)}</button>
   `).join('');
-  state.activeTab = state.config.views[0].id;
 }
 
 function setTab(tabId) {
@@ -147,6 +239,10 @@ function renderStats() {
     const value = stat.filter ? items.filter((item) => item[stat.filter.field] === stat.filter.value).length : items.length;
     return `<div class="stat"><span>${escapeHtml(stat.label)}</span><strong>${value}</strong></div>`;
   }).join('')}</div>`;
+}
+
+function filterActionsByPermission(actions) {
+  return actions.filter((action) => canCurrentUser('action', action.id));
 }
 
 function renderCard(item, collection, view) {
@@ -171,14 +267,16 @@ function renderCard(item, collection, view) {
   if (collection === 'batches' && Number(item.quantity || 0) > 0) {
     actions = actions.filter((action) => action.id !== 'batch-waste');
   }
-  actions = actions
+  actions = filterActionsByPermission(actions);
+  const actionsHtml = actions
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${item.id}">${escapeHtml(action.label)}</button>`)
     .join('');
-  const extraActions = collection === 'batches' && item.status !== '已报废'
+  const canCreateWaste = collection === 'batches' && item.status !== '已报废' && canCurrentUser('create', 'wastes');
+  const extraActions = canCreateWaste
     ? `<button class="ghost" data-create-waste-from-batch="${item.id}">发起报废</button>`
     : '';
-  const allActions = actions || extraActions
-    ? `<div class="actions">${actions}${extraActions}</div>`
+  const allActions = actionsHtml || extraActions
+    ? `<div class="actions">${actionsHtml}${extraActions}</div>`
     : '';
   return `<article class="card" data-collection="${collection}" data-id="${item.id}">
     <div class="card-head"><h3>${escapeHtml(title)}</h3>${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}</div>
@@ -292,7 +390,8 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
   if (Number(batch.quantity || 0) > 0) {
     actions = actions.filter((action) => action.id !== 'batch-waste');
   }
-  actions = actions
+  actions = filterActionsByPermission(actions);
+  const actionsHtml = actions
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${batch.id}">${escapeHtml(action.label)}</button>`)
     .join('');
 
@@ -300,7 +399,8 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
     ? `<button class="ghost" data-view-requests="${batch.id}">查看关联申请</button>`
     : '';
 
-  const wasteFromBatchBtn = batch.status !== '已报废'
+  const canCreateWaste = batch.status !== '已报废' && canCurrentUser('create', 'wastes');
+  const wasteFromBatchBtn = canCreateWaste
     ? `<button class="ghost" data-create-waste-from-batch="${batch.id}">发起报废</button>`
     : '';
 
@@ -316,14 +416,13 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
       </div>
     </div>
     ${details ? `<div class="detail">${details}</div>` : ''}
-    ${actions || viewRequestsBtn || wasteFromBatchBtn ? `<div class="actions">${actions}${viewRequestsBtn}${wasteFromBatchBtn}</div>` : ''}
+    ${actionsHtml || viewRequestsBtn || wasteFromBatchBtn ? `<div class="actions">${actionsHtml}${viewRequestsBtn}${wasteFromBatchBtn}</div>` : ''}
   </article>`;
 }
 
 function renderRiskAlertsView(view) {
   const alertData = computeAlertData();
   const { expiringSoon, expiredNotWasted, lowStock, lockedWithOpenRequests } = alertData;
-  const totalCount = expiringSoon.length + expiredNotWasted.length + lowStock.length + lockedWithOpenRequests.length;
 
   return `<section class="view" id="${view.id}">
     <div class="alert-stats">
@@ -421,13 +520,22 @@ function renderDashboardView(view) {
 
 function renderCrudView(view) {
   const statusOptions = view.statusOptions || [];
+  const canCreate = canCurrentUser('create', view.collection);
+  const createForm = canCreate ? `
+    <form class="panel" data-create="${view.collection}" data-view="${view.id}">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="form-grid">${view.fields.map(formField).join('')}</div>
+      <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
+    </form>
+  ` : `
+    <div class="panel no-permission-panel">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="no-permission-tip">⚠️ 当前用户无权限创建${escapeHtml(collectionLabel(view.collection))}，请切换到有权限的角色。</div>
+    </div>
+  `;
   return `<section class="view" id="${view.id}">
     <div class="grid">
-      <form class="panel" data-create="${view.collection}" data-view="${view.id}">
-        <h2>${escapeHtml(view.formTitle)}</h2>
-        <div class="form-grid">${view.fields.map(formField).join('')}</div>
-        <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
-      </form>
+      ${createForm}
       <div class="panel">
         <h2>${escapeHtml(view.listTitle)}</h2>
         <div class="toolbar">
@@ -536,7 +644,8 @@ function renderStocktakeItemRows(stocktake) {
     const diff = actual - book;
     const rowTone = diffTone(diff);
     const diffHtml = `<span class="diff-cell ${rowTone}">${escapeHtml(diffLabel(diff))}</span>`;
-    const inputAttrs = confirmed ? 'readonly disabled' : '';
+    const canEdit = !confirmed && canCurrentUser('special', 'stocktakes-items');
+    const inputAttrs = canEdit ? '' : 'readonly disabled';
     return `
       <tr class="stocktake-row ${rowTone ? 'row-' + rowTone : ''}">
         <td>
@@ -553,7 +662,7 @@ function renderStocktakeItemRows(stocktake) {
         </td>
         <td class="num-cell">${diffHtml}</td>
         <td>
-          <input type="text" class="st-input remark-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="remark" value="${escapeHtml(item.remark || '')}" ${confirmed ? 'readonly disabled' : ''} placeholder="差异原因...">
+          <input type="text" class="st-input remark-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="remark" value="${escapeHtml(item.remark || '')}" ${inputAttrs} placeholder="差异原因...">
         </td>
       </tr>
     `;
@@ -568,12 +677,16 @@ function renderStocktakeCard(stocktake, view) {
   const cabinetLabel = stocktake.cabinetId ? `范围：${escapeHtml(relationLabel({ collection: 'cabinets', labelFields: ['code', 'area'] }, stocktake.cabinetId))}` : '范围：全部柜位';
   const diffHtml = (stocktake.items || []).length || state.stocktakeEdits[stocktake.id]?.length ? renderStocktakeDiffSummary(stocktake) : '';
 
+  const canSaveItems = !confirmed && canCurrentUser('special', 'stocktakes-items');
+  const canConfirm = !confirmed && canCurrentUser('special', 'stocktakes-confirm') && stocktake.items && stocktake.items.length > 0;
+
   let expandContent = '';
   if (isExpanded) {
     const actions = confirmed ? '' : `
       <div class="stocktake-actions">
-        <button class="ghost" data-stocktake-save="${stocktake.id}">保存录入</button>
-        <button class="secondary" data-stocktake-confirm="${stocktake.id}" ${!stocktake.items || !stocktake.items.length ? 'disabled' : ''}>确认盘点并更新库存</button>
+        ${canSaveItems ? `<button class="ghost" data-stocktake-save="${stocktake.id}">保存录入</button>` : ''}
+        ${canConfirm ? `<button class="secondary" data-stocktake-confirm="${stocktake.id}">确认盘点并更新库存</button>` : ''}
+        ${!canSaveItems && !canConfirm ? `<span class="no-permission-tip-inline">⚠️ 当前角色无盘点操作权限</span>` : ''}
       </div>
     `;
     expandContent = `
@@ -626,13 +739,22 @@ function renderStocktakeList(view) {
 
 function renderStocktakeView(view) {
   const statusOptions = view.statusOptions || [];
+  const canCreate = canCurrentUser('create', 'stocktakes');
+  const createForm = canCreate ? `
+    <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-stocktake-create>
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="form-grid">${view.fields.map(formField).join('')}</div>
+      <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
+    </form>
+  ` : `
+    <div class="panel no-permission-panel">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="no-permission-tip">⚠️ 当前用户无权限创建盘点单，请切换到有权限的角色。</div>
+    </div>
+  `;
   return `<section class="view" id="${view.id}">
     <div class="grid">
-      <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-stocktake-create>
-        <h2>${escapeHtml(view.formTitle)}</h2>
-        <div class="form-grid">${view.fields.map(formField).join('')}</div>
-        <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
-      </form>
+      ${createForm}
       <div class="panel">
         <h2>${escapeHtml(view.listTitle)}</h2>
         <div class="toolbar">
@@ -656,6 +778,10 @@ function renderWasteCard(waste, view) {
   const batchLabel = batch ? `${batch.name} / ${batch.batchNo}` : '未关联批次';
   const unit = batch?.unit || '';
 
+  const canApprove = waste.status === '待审批' && canCurrentUser('special', 'wastes-approve');
+  const canReject = waste.status === '待审批' && canCurrentUser('action', 'waste-reject');
+  const canDispose = waste.status === '待处置' && canCurrentUser('special', 'wastes-dispose');
+
   let expandContent = '';
   if (isExpanded) {
     const detailRows = (view.detailFields || []).map((field) => {
@@ -673,22 +799,23 @@ function renderWasteCard(waste, view) {
     if (waste.status === '待审批') {
       actionButtons = `
         <div class="waste-actions">
-          <button class="secondary" data-waste-approve="${waste.id}">审批通过</button>
-          <button class="danger" data-action="waste-reject" data-id="${waste.id}">驳回</button>
+          ${canApprove ? `<button class="secondary" data-waste-approve="${waste.id}">审批通过</button>` : ''}
+          ${canReject ? `<button class="danger" data-action="waste-reject" data-id="${waste.id}">驳回</button>` : ''}
+          ${!canApprove && !canReject ? `<span class="no-permission-tip-inline">⚠️ 当前角色无报废审批权限</span>` : ''}
         </div>
       `;
     } else if (waste.status === '待处置') {
       const actualQty = state.wasteEdits[waste.id]?.actualQuantity ?? waste.quantity;
       const disposalMethod = state.wasteEdits[waste.id]?.disposalMethod || waste.disposalMethod || '';
       const witness = state.wasteEdits[waste.id]?.witness || waste.witness || '';
-      const operator = state.wasteEdits[waste.id]?.operator || '';
+      const disabledAttr = canDispose ? '' : 'readonly disabled';
       actionButtons = `
         <div class="waste-dispose-form">
           <h4>确认处置</h4>
           <div class="form-grid">
-            <label>实际处置数量<input type="number" class="waste-input" data-waste="${waste.id}" data-field="actualQuantity" value="${actualQty}" min="0" max="${waste.quantity}"><span class="unit">${escapeHtml(unit)}</span></label>
+            <label>实际处置数量<input type="number" class="waste-input" data-waste="${waste.id}" data-field="actualQuantity" value="${actualQty}" min="0" max="${waste.quantity}" ${disabledAttr}><span class="unit">${escapeHtml(unit)}</span></label>
             <label>处置方式
-              <select class="waste-input" data-waste="${waste.id}" data-field="disposalMethod">
+              <select class="waste-input" data-waste="${waste.id}" data-field="disposalMethod" ${canDispose ? '' : 'disabled'}>
                 <option value="">请选择</option>
                 <option value="专业机构回收" ${disposalMethod === '专业机构回收' ? 'selected' : ''}>专业机构回收</option>
                 <option value="化学中和销毁" ${disposalMethod === '化学中和销毁' ? 'selected' : ''}>化学中和销毁</option>
@@ -696,11 +823,10 @@ function renderWasteCard(waste, view) {
                 <option value="其他" ${disposalMethod === '其他' ? 'selected' : ''}>其他</option>
               </select>
             </label>
-            <label>见证人<input type="text" class="waste-input" data-waste="${waste.id}" data-field="witness" value="${escapeHtml(witness)}"></label>
-            <label>操作人<input type="text" class="waste-input" data-waste="${waste.id}" data-field="operator" value="${escapeHtml(operator)}"></label>
+            <label>见证人<input type="text" class="waste-input" data-waste="${waste.id}" data-field="witness" value="${escapeHtml(witness)}" ${disabledAttr}></label>
           </div>
           <div class="waste-actions">
-            <button class="danger" data-waste-dispose="${waste.id}">确认处置并扣减库存</button>
+            ${canDispose ? `<button class="danger" data-waste-dispose="${waste.id}">确认处置并扣减库存</button>` : `<span class="no-permission-tip-inline">⚠️ 当前角色无报废处置权限</span>`}
           </div>
         </div>
       `;
@@ -772,13 +898,22 @@ function renderWasteList(view) {
 
 function renderWasteView(view) {
   const statusOptions = view.statusOptions || [];
+  const canCreate = canCurrentUser('create', 'wastes');
+  const createForm = canCreate ? `
+    <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-waste-create>
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="form-grid">${view.fields.map(formField).join('')}</div>
+      <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
+    </form>
+  ` : `
+    <div class="panel no-permission-panel">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="no-permission-tip">⚠️ 当前用户无权限创建报废单，请切换到有权限的角色。</div>
+    </div>
+  `;
   return `<section class="view" id="${view.id}">
     <div class="grid">
-      <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-waste-create>
-        <h2>${escapeHtml(view.formTitle)}</h2>
-        <div class="form-grid">${view.fields.map(formField).join('')}</div>
-        <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
-      </form>
+      ${createForm}
       <div class="panel">
         <h2>${escapeHtml(view.listTitle)}</h2>
         <div class="toolbar">
@@ -825,6 +960,8 @@ function renderAuditLogCard(log) {
     </div>`;
   }
 
+  const opLabel = log.operator && log.operator !== SYSTEM_IMPORT_LABEL ? log.operator : SYSTEM_IMPORT_LABEL;
+
   return `<article class="card audit-log-card">
     <div class="card-head">
       <div>
@@ -837,7 +974,7 @@ function renderAuditLogCard(log) {
     <div class="detail">
       <div>操作时间<br><strong>${fmtDate(log.createdAt)}</strong></div>
       <div>目标集合<br><strong>${escapeHtml(collLabel)}</strong></div>
-      <div>操作人<br><strong>${escapeHtml(log.operator || '系统')}</strong></div>
+      <div>操作人<br><strong>${escapeHtml(opLabel)}</strong></div>
     </div>
     ${changesHtml}
   </article>`;
@@ -904,6 +1041,7 @@ function renderAuditLogsView(view) {
 }
 
 function renderBatchImportView(view) {
+  const canImport = canCurrentUser('special', 'batches-import');
   const preview = state.importPreview;
   const hasPreview = preview && preview.totalRows > 0;
 
@@ -913,6 +1051,35 @@ function renderBatchImportView(view) {
 
   let summaryHtml = '';
   let tableHtml = '';
+  let inputArea = '';
+
+  if (!canImport) {
+    inputArea = `
+      <div class="no-permission-panel">
+        <div class="no-permission-tip" style="font-size:15px;padding:24px;">⚠️ 当前用户无批量导入权限，请切换到库管员角色。</div>
+      </div>
+    `;
+  } else if (!hasPreview) {
+    inputArea = `
+      <div class="import-input-area">
+        <label>
+          CSV 内容
+          <textarea id="csv-input" placeholder="请粘贴 CSV 内容，第一行为表头&#10;示例表头：药剂名称,品类,批次号,供应商,存放柜位,安全等级,库存数量,单位,有效期,状态"></textarea>
+        </label>
+        <div class="import-hint">
+          <details>
+            <summary>查看示例 CSV 格式</summary>
+            <pre class="sample-csv">${escapeHtml(sampleCsv)}</pre>
+          </details>
+          <p class="meta">必填字段：药剂名称、品类、批次号、供应商、存放柜位、库存数量、单位、有效期</p>
+          <p class="meta">供应商和柜位请填写名称/编号，系统会自动匹配</p>
+        </div>
+        <div class="import-actions">
+          <button data-import-preview>解析预览</button>
+        </div>
+      </div>
+    `;
+  }
 
   if (hasPreview) {
     summaryHtml = `
@@ -974,8 +1141,7 @@ function renderBatchImportView(view) {
                 <td class="col-status">
                   ${row.rowType === 'valid'
                     ? '<span class="pill ok">有效</span>'
-                    : `<div class="import-errors">${row.errors.map((e) => `<span class="pill bad">${escapeHtml(e)}</span>`).join('')}</div>`
-                  }
+                    : `<div class="import-errors">${row.errors.map((e) => `<span class="pill bad">${escapeHtml(e)}</span>`).join('')}</div>`}
                 </td>
               </tr>
             `).join('')}
@@ -995,25 +1161,7 @@ function renderBatchImportView(view) {
     <div class="panel">
       <h2>批量导入药剂批次</h2>
       <p class="meta">粘贴 CSV 文本，支持中文表头。系统会先预览解析结果，确认无误后再写入。</p>
-      ${!hasPreview ? `
-      <div class="import-input-area">
-        <label>
-          CSV 内容
-          <textarea id="csv-input" placeholder="请粘贴 CSV 内容，第一行为表头&#10;示例表头：药剂名称,品类,批次号,供应商,存放柜位,安全等级,库存数量,单位,有效期,状态"></textarea>
-        </label>
-        <div class="import-hint">
-          <details>
-            <summary>查看示例 CSV 格式</summary>
-            <pre class="sample-csv">${escapeHtml(sampleCsv)}</pre>
-          </details>
-          <p class="meta">必填字段：药剂名称、品类、批次号、供应商、存放柜位、库存数量、单位、有效期</p>
-          <p class="meta">供应商和柜位请填写名称/编号，系统会自动匹配</p>
-        </div>
-        <div class="import-actions">
-          <button data-import-preview>解析预览</button>
-        </div>
-      </div>
-      ` : ''}
+      ${inputArea}
       ${summaryHtml}
       ${tableHtml}
     </div>
@@ -1043,6 +1191,40 @@ function render() {
   $('#title').textContent = state.config.title;
   document.title = state.config.title;
   $('#lede').textContent = state.config.lede;
+  renderUserSwitcher();
+  const needLogin = !state.currentUser;
+  if (needLogin) {
+    $('#main').innerHTML = `
+      <div class="login-required">
+        <div class="login-card">
+          <h2>👋 欢迎使用</h2>
+          <p>请先选择当前用户角色以继续操作</p>
+          <div class="login-user-list">
+            ${(state.config.users || []).map((u) => {
+              const roleInfo = state.config.roles?.[u.role] || {};
+              const color = roleInfo.color || '#555';
+              return `
+                <button class="login-user-option" data-switch-user="${u.id}">
+                  <span class="user-avatar" style="background:${color};width:48px;height:48px;font-size:20px;">${escapeHtml(u.name?.[0] || 'U')}</span>
+                  <div class="login-user-info">
+                    <span class="login-user-name">${escapeHtml(u.name)}</span>
+                    <span class="login-user-role" style="color:${color};">${escapeHtml(u.roleLabel)}</span>
+                  </div>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  for (const view of state.config.views) {
+    if (!state.filters[view.id]) {
+      state.filters[view.id] = { search: '', status: '' };
+    }
+  }
+  renderTabs();
   $('#main').innerHTML = state.config.views.map((view) => {
     if (view.type === 'risk-alerts') return renderRiskAlertsView(view);
     if (view.type === 'dashboard') return renderDashboardView(view);
@@ -1063,9 +1245,100 @@ function refreshStocktakeList(viewId) {
   if (listEl) listEl.innerHTML = renderStocktakeList(view);
 }
 
-async function load() {
+async function loadDb() {
   state.db = await api('/api/db');
   render();
+}
+
+function collectFormData(form) {
+  const data = {};
+  const formData = new FormData(form);
+  for (const [key, value] of formData.entries()) {
+    if (value === '' || value === null || value === undefined) continue;
+    if (!isNaN(Number(value)) && value !== '' && typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) {
+      data[key] = Number(value);
+    } else {
+      data[key] = value;
+    }
+  }
+  return data;
+}
+
+function parseImportText(text) {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error('数据不足：至少需要表头和一行数据');
+  const headers = lines[0].split(/[,\t]/).map(h => h.trim());
+  const nameIdx = headers.findIndex(h => h.includes('名称') || h.toLowerCase().includes('name'));
+  const categoryIdx = headers.findIndex(h => h.includes('品类') || h.toLowerCase().includes('category'));
+  const batchNoIdx = headers.findIndex(h => h.includes('批次') || h.toLowerCase().includes('batch'));
+  const supplierIdx = headers.findIndex(h => h.includes('供应商') || h.toLowerCase().includes('supplier'));
+  const cabinetIdx = headers.findIndex(h => h.includes('柜位') || h.toLowerCase().includes('cabinet'));
+  const safetyIdx = headers.findIndex(h => h.includes('安全') || h.toLowerCase().includes('safety'));
+  const qtyIdx = headers.findIndex(h => h.includes('数量') || h.includes('库存') || h.toLowerCase().includes('quantity'));
+  const unitIdx = headers.findIndex(h => h.includes('单位') || h.toLowerCase().includes('unit'));
+  const expiresIdx = headers.findIndex(h => h.includes('有效期') || h.includes('到期') || h.toLowerCase().includes('expire'));
+  if (nameIdx < 0 || batchNoIdx < 0) throw new Error('缺少必要列：名称、批次号');
+  const suppliers = state.db.suppliers || [];
+  const cabinets = state.db.cabinets || [];
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(/[,\t]/).map(c => c.trim());
+    const row = {};
+    if (nameIdx >= 0) row.name = cols[nameIdx];
+    if (categoryIdx >= 0) row.category = cols[categoryIdx] || '未分类';
+    if (batchNoIdx >= 0) row.batchNo = cols[batchNoIdx];
+    if (safetyIdx >= 0) row.safetyLevel = cols[safetyIdx] || '低';
+    if (qtyIdx >= 0) row.quantity = Number(cols[qtyIdx] || 0);
+    if (unitIdx >= 0) row.unit = cols[unitIdx] || '罐';
+    if (expiresIdx >= 0) row.expiresAt = cols[expiresIdx];
+    if (supplierIdx >= 0) {
+      const name = cols[supplierIdx];
+      const match = suppliers.find(s => s.name === name);
+      if (match) row.supplierId = match.id;
+    }
+    if (cabinetIdx >= 0) {
+      const code = cols[cabinetIdx];
+      const match = cabinets.find(c => c.code === code || c.area === code);
+      if (match) row.cabinetId = match.id;
+    }
+    row.status = '可用';
+    if (!row.name || !row.batchNo) continue;
+    results.push(row);
+  }
+  return results;
+}
+
+function collectStocktakeItems(stocktakeId) {
+  const inputs = state.stocktakeInputs?.[stocktakeId] || {};
+  const stocktake = state.db.stocktakes?.find(s => s.id === stocktakeId);
+  const existing = stocktake?.items || [];
+  const cabinetFilter = stocktake?.cabinetId;
+  const allBatches = (state.db.batches || []).filter(b => !cabinetFilter || b.cabinetId === cabinetFilter);
+  return allBatches.map(batch => {
+    const inputQty = inputs[batch.id];
+    const existingItem = existing.find(it => it.batchId === batch.id);
+    const systemQty = Number(batch.quantity || 0);
+    const actualQty = inputQty !== undefined ? Number(inputQty) : (existingItem?.actualQuantity ?? systemQty);
+    return {
+      batchId: batch.id,
+      batchName: batch.name,
+      batchNo: batch.batchNo,
+      systemQuantity: systemQty,
+      actualQuantity: actualQty,
+      diff: actualQty - systemQty
+    };
+  });
+}
+
+function collectWasteDisposalData(wasteId) {
+  const inputs = state.wasteDisposalInputs?.[wasteId] || {};
+  const waste = state.db.wastes?.find(w => w.id === wasteId);
+  return {
+    actualQuantity: inputs.actualQuantity !== undefined ? Number(inputs.actualQuantity) : Number(waste?.quantity || 0),
+    disposalMethod: inputs.disposalMethod || waste?.disposalMethod || '',
+    witness: inputs.witness || '',
+    disposalNote: inputs.disposalNote || ''
+  };
 }
 
 function openRequestModal(batchId) {
@@ -1120,412 +1393,409 @@ function closeRequestModal() {
 }
 
 function resetViewFilters(viewId) {
-  const view = state.config.views.find((entry) => entry.id === viewId);
-  if (!view) return;
-
-  const searchInput = $(`#search-${viewId}`);
-  const statusInput = $(`#status-${viewId}`);
-  let changed = false;
-
-  if (searchInput?.value) {
-    searchInput.value = '';
-    changed = true;
+  const view = state.config.views.find((v) => v.id === viewId);
+  if (!view) {
+    state.filters[viewId] = { search: '', status: '' };
   }
-  if (statusInput?.value) {
-    statusInput.value = '';
-    changed = true;
-  }
-
-  if (changed) {
-    const listEl = $(`#list-${viewId}`);
-    if (listEl) listEl.innerHTML = renderList(view);
-  }
+  state.expandedItems[viewId] = null;
+  state.activeModal = null;
+  state.importPreview = null;
+  render();
 }
 
 function jumpToRequest(requestId) {
-  state.highlightRequestId = requestId;
   closeRequestModal();
-  setTab('requests');
-  resetViewFilters('requests');
-  setTimeout(() => {
-    const card = document.querySelector(`#requests .card[data-id="${requestId}"]`);
-    if (card) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.classList.add('highlight');
-      setTimeout(() => card.classList.remove('highlight'), 2500);
-    }
-    state.highlightRequestId = null;
-  }, 150);
+  state.activeView = 'requests';
+  state.expandedItems['requests'] = requestId;
+  render();
 }
 
-document.addEventListener('click', async (event) => {
-  const tab = event.target.closest('.tab');
-  const action = event.target.closest('[data-action]');
-  const expandEl = event.target.closest('[data-expand-stocktake]');
-  const expandWasteEl = event.target.closest('[data-expand-waste]');
-  const saveBtn = event.target.closest('[data-stocktake-save]');
-  const confirmBtn = event.target.closest('[data-stocktake-confirm]');
-  const wasteApproveBtn = event.target.closest('[data-waste-approve]');
-  const wasteDisposeBtn = event.target.closest('[data-waste-dispose]');
-  const createWasteFromBatchBtn = event.target.closest('[data-create-waste-from-batch]');
-  const viewRequestsBtn = event.target.closest('[data-view-requests]');
-  const closeModalBtn = event.target.closest('#close-modal');
-  const jumpRequestBtn = event.target.closest('[data-jump-request]');
-  const modal = event.target.closest('#request-modal');
-  const importPreviewBtn = event.target.closest('[data-import-preview]');
-  const importResetBtn = event.target.closest('[data-import-reset]');
-  const importConfirmBtn = event.target.closest('[data-import-confirm]');
-
-  if (tab) setTab(tab.dataset.tab);
-
-  if (importPreviewBtn) {
-    const csvInput = $('#csv-input');
-    const csvText = csvInput?.value || '';
-    if (!csvText.trim()) {
-      toast('请输入 CSV 内容');
-      return;
-    }
-    try {
-      const result = await api('/api/batches/import-preview', {
-        method: 'POST',
-        body: JSON.stringify({ csvText })
-      });
-      state.importPreview = result;
-      const view = state.config.views.find((v) => v.id === 'batch-import');
-      if (view) {
-        const viewEl = $('#batch-import');
-        if (viewEl) viewEl.outerHTML = renderBatchImportView(view);
-      }
-      toast(`解析完成：${result.validCount} 条有效，${result.errorCount} 条错误`);
-    } catch (err) {
-      toast(err.message);
-    }
-    return;
-  }
-
-  if (importResetBtn) {
+document.addEventListener('click', async (e) => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) {
+    const id = tab.dataset.tab;
+    state.activeTab = id;
+    state.activeView = id;
+    state.expandedItems[id] = null;
+    state.activeModal = null;
     state.importPreview = null;
-    const view = state.config.views.find((v) => v.id === 'batch-import');
-    if (view) {
-      const viewEl = $('#batch-import');
-      if (viewEl) viewEl.outerHTML = renderBatchImportView(view);
-    }
+    render();
     return;
   }
 
-  if (importConfirmBtn) {
-    const preview = state.importPreview;
-    if (!preview || !preview.validRows?.length) {
+  const expand = e.target.closest('[data-expand]');
+  if (expand) {
+    const viewId = expand.dataset.view;
+    const id = expand.dataset.expand;
+    state.expandedItems[viewId] = state.expandedItems[viewId] === id ? null : id;
+    render();
+    return;
+  }
+
+  const closeModal = e.target.closest('[data-close-modal]');
+  if (closeModal) {
+    state.activeModal = null;
+    render();
+    return;
+  }
+
+  const jumpReq = e.target.closest('[data-jump-request]');
+  if (jumpReq) {
+    jumpToRequest(jumpReq.dataset.jumpRequest);
+    return;
+  }
+
+  const closeReqModal = e.target.closest('#request-modal [data-close-modal]');
+  if (closeReqModal || (e.target.id === 'request-modal')) {
+    closeRequestModal();
+    return;
+  }
+
+  const switchUser = e.target.closest('[data-switch-user]');
+  if (switchUser) {
+    const uid = switchUser.dataset.switchUser;
+    const user = state.config.users.find((u) => u.id === uid);
+    if (user) {
+      state.currentUser = user;
+      localStorage.setItem(USER_STORAGE_KEY, user.id);
+      state.expandedItems = {};
+      state.activeModal = null;
+      state.importPreview = null;
+      render();
+    }
+    const dd = $('#userDropdown');
+    if (dd) dd.classList.add('hidden');
+    return;
+  }
+
+  const userChip = e.target.closest('#userChip');
+  if (userChip) {
+    const dd = $('#userDropdown');
+    if (dd) dd.classList.toggle('hidden');
+    return;
+  } else {
+    const dd = $('#userDropdown');
+    if (dd && !dd.classList.contains('hidden')) {
+      dd.classList.add('hidden');
+    }
+  }
+
+  const openWasteFromBatch = e.target.closest('[data-open-waste-from-batch]');
+  if (openWasteFromBatch) {
+    const batchId = openWasteFromBatch.dataset.openWasteFromBatch;
+    state.activeView = 'wastes';
+    state.activeModal = { collection: 'wastes', prefill: { batchId } };
+    render();
+    return;
+  }
+
+  const viewRequestsBtn = e.target.closest('[data-view-requests]');
+  if (viewRequestsBtn) {
+    const batchId = viewRequestsBtn.dataset.viewRequests;
+    showRequestsForBatch(batchId);
+    return;
+  }
+
+  const importPreview = e.target.closest('[data-import-preview]');
+  if (importPreview) {
+    e.preventDefault();
+    const textarea = document.getElementById('import-textarea');
+    const raw = textarea ? textarea.value : '';
+    try {
+      const parsed = parseImportText(raw);
+      state.importPreview = parsed;
+      render();
+    } catch (err) {
+        toast('解析失败：' + err.message);
+      }
+    return;
+  }
+
+  const importReset = e.target.closest('[data-import-reset]');
+  if (importReset) {
+    state.importPreview = null;
+    render();
+    return;
+  }
+
+  const importConfirm = e.target.closest('[data-import-confirm]');
+  if (importConfirm) {
+    e.preventDefault();
+    if (!state.importPreview || state.importPreview.length === 0) {
       toast('没有可导入的数据');
       return;
-    }
-    const ok = confirm(`确认导入 ${preview.validCount} 条药剂批次？\n确认后将写入系统，不可撤销。`);
-    if (!ok) return;
-    try {
-      const rows = preview.validRows.map((r) => r.data);
-      const result = await api('/api/batches/import-confirm', {
-        method: 'POST',
-        body: JSON.stringify({ rows, operator: '系统' })
-      });
-      await load();
-      state.importPreview = null;
-      const view = state.config.views.find((v) => v.id === 'batch-import');
-      if (view) {
-        const viewEl = $('#batch-import');
-        if (viewEl) viewEl.outerHTML = renderBatchImportView(view);
       }
-      toast(`导入成功：${result.importedCount} 条`);
+    const results = [];
+    for (const row of state.importPreview) {
+      const ok = await api('/batches', { method: 'POST', body: JSON.stringify(row) });
+      results.push(ok);
+    }
+    toast(`成功导入 ${results.filter(r => r).length} 条`);
+    state.importPreview = null;
+    await loadDb();
+    render();
+    return;
+  }
+
+  const stocktakeSave = e.target.closest('[data-stocktake-save]');
+  if (stocktakeSave) {
+    const id = stocktakeSave.dataset.stocktakeSave;
+    const items = collectStocktakeItems(id);
+    await api(`/stocktakes/${id}/items`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const stocktakeConfirm = e.target.closest('[data-stocktake-confirm]');
+  if (stocktakeConfirm) {
+    const id = stocktakeConfirm.dataset.stocktakeConfirm;
+    await api(`/stocktakes/${id}/confirm`, { method: 'POST' });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const wasteApprove = e.target.closest('[data-waste-approve]');
+  if (wasteApprove) {
+    const id = wasteApprove.dataset.wasteApprove;
+    await api(`/wastes/${id}/approve`, { method: 'POST' });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const wasteDispose = e.target.closest('[data-waste-dispose]');
+  if (wasteDispose) {
+    const id = wasteDispose.dataset.wasteDispose;
+    const payload = collectWasteDisposalData(id);
+    await api(`/wastes/${id}/dispose`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    await loadDb();
+    render();
+    return;
+  }
+
+  const actionBtn = e.target.closest('[data-action]');
+  if (actionBtn) {
+    const actionId = actionBtn.dataset.action;
+    const id = actionBtn.dataset.id;
+    const viewId = actionBtn.dataset.view;
+    if (actionBtn.dataset.confirm && !confirm(`确定执行「${actionBtn.textContent.trim()}」操作吗？`)) {
+      return;
+    }
+    try {
+      await api(`/action/${actionId}/${id}`, { method: 'POST' });
+      await loadDb();
+      state.expandedItems[viewId] = id;
+      render();
     } catch (err) {
-      toast(err.message);
+      toast(err.message || '操作失败');
     }
     return;
   }
 
-  if (createWasteFromBatchBtn) {
-    const batchId = createWasteFromBatchBtn.dataset.createWasteFromBatch;
-    state.preselectedBatchId = batchId;
-    setTab('wastes');
-    setTimeout(() => {
-      const form = document.querySelector('#wastes form[data-create="wastes"]');
-      if (form) {
-        const batchSelect = form.querySelector('select[name="batchId"]');
-        if (batchSelect) {
-          batchSelect.value = batchId;
-          batchSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        const quantityInput = form.querySelector('input[name="quantity"]');
-        if (quantityInput) {
-          const batch = state.db.batches?.find((b) => b.id === batchId);
-          if (batch) quantityInput.value = batch.quantity;
+  const openModal = e.target.closest('[data-open-modal]');
+  if (openModal) {
+    state.activeModal = { collection: openModal.dataset.openModal };
+    render();
+    return;
+  }
+
+  const deleteBtn = e.target.closest('[data-delete]');
+  if (deleteBtn) {
+    const viewId = deleteBtn.dataset.view;
+    const id = deleteBtn.dataset.delete;
+    const label = deleteBtn.dataset.label || '该记录';
+    if (!confirm(`确定删除${label}吗？此操作不可恢复。`)) return;
+    const collection = deleteBtn.dataset.collection;
+    await api(`/${collection}/${id}`, { method: 'DELETE' });
+    state.expandedItems[viewId] = null;
+    await loadDb();
+    render();
+    return;
+  }
+});
+
+document.addEventListener('input', (e) => {
+  const searchInput = e.target.closest('[data-search]');
+  if (searchInput) {
+    const viewId = searchInput.dataset.search;
+    state.filters[viewId].search = searchInput.value;
+    clearTimeout(state._searchTimer);
+    state._searchTimer = setTimeout(render, 200);
+    return;
+  }
+
+  const statusFilter = e.target.closest('[data-status-filter]');
+  if (statusFilter) {
+    const viewId = statusFilter.dataset.statusFilter;
+    state.filters[viewId].status = statusFilter.value;
+    render();
+    return;
+  }
+
+  const stocktakeQtyInput = e.target.closest('[data-stocktake-qty]');
+  if (stocktakeQtyInput) {
+    const stId = stocktakeQtyInput.dataset.stocktakeQty;
+    const batchId = stocktakeQtyInput.dataset.batchId;
+    if (!state.stocktakeInputs) state.stocktakeInputs = {};
+    if (!state.stocktakeInputs[stId]) state.stocktakeInputs[stId] = {};
+    state.stocktakeInputs[stId][batchId] = stocktakeQtyInput.value;
+    return;
+  }
+
+  const wasteActualInput = e.target.closest('[data-waste-actual]');
+  if (wasteActualInput) {
+    const wId = wasteActualInput.dataset.wasteActual;
+    if (!state.wasteDisposalInputs) state.wasteDisposalInputs = {};
+    state.wasteDisposalInputs[wId] = state.wasteDisposalInputs[wId] || {};
+    state.wasteDisposalInputs[wId].actualQuantity = wasteActualInput.value;
+    return;
+  }
+
+  const wasteMethodInput = e.target.closest('[data-waste-method]');
+  if (wasteMethodInput) {
+    const wId = wasteMethodInput.dataset.wasteMethod;
+    if (!state.wasteDisposalInputs) state.wasteDisposalInputs = {};
+    state.wasteDisposalInputs[wId] = state.wasteDisposalInputs[wId] || {};
+    state.wasteDisposalInputs[wId].disposalMethod = wasteMethodInput.value;
+    return;
+  }
+
+  const wasteWitnessInput = e.target.closest('[data-waste-witness]');
+  if (wasteWitnessInput) {
+    const wId = wasteWitnessInput.dataset.wasteWitness;
+    if (!state.wasteDisposalInputs) state.wasteDisposalInputs = {};
+    state.wasteDisposalInputs[wId] = state.wasteDisposalInputs[wId] || {};
+    state.wasteDisposalInputs[wId].witness = wasteWitnessInput.value;
+    return;
+  }
+
+  const wasteNoteInput = e.target.closest('[data-waste-note]');
+  if (wasteNoteInput) {
+    const wId = wasteNoteInput.dataset.wasteNote;
+    if (!state.wasteDisposalInputs) state.wasteDisposalInputs = {};
+    state.wasteDisposalInputs[wId] = state.wasteDisposalInputs[wId] || {};
+    state.wasteDisposalInputs[wId].disposalNote = wasteNoteInput.value;
+    return;
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const autoFill = e.target.closest('[data-auto-fill]');
+  if (autoFill) {
+    const viewCfg = state.config.views.find(v => v.id === state.activeView);
+    const form = e.target.closest('form');
+    if (!form || !viewCfg) return;
+    const fieldName = autoFill.name;
+    const fieldCfg = viewCfg.fields?.find(f => f.name === fieldName);
+    if (!fieldCfg || !fieldCfg.autoFill || fieldCfg.type !== 'relation') return;
+    const relatedId = autoFill.value;
+    const related = state.db[fieldCfg.collection]?.find(r => r.id === relatedId);
+    if (!related) return;
+    for (const rule of fieldCfg.autoFill) {
+      const target = form.querySelector(`[name="${rule.to}"]`);
+      if (target && related[rule.from] !== undefined) {
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+          target.value = related[rule.from];
         }
       }
-    }, 50);
-    toast('已跳转到报废页面，请确认报废信息');
+    }
+    return;
+  }
+});
+
+document.addEventListener('submit', async (e) => {
+  const stocktakeForm = e.target.closest('[data-stocktake-form]');
+  if (stocktakeForm) {
+    e.preventDefault();
+    const data = collectFormData(stocktakeForm);
+    data.status = '录入中';
+    await api('/stocktakes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    state.activeModal = null;
+    await loadDb();
+    render();
     return;
   }
 
-  if (action) {
-    try {
-      await api(`/api/action/${action.dataset.action}/${action.dataset.id}`, { method: 'POST' });
-      await load();
-      toast('已更新');
-    } catch (error) {
-      toast(error.message);
-    }
+  const wasteForm = e.target.closest('[data-waste-form]');
+  if (wasteForm) {
+    e.preventDefault();
+    const data = collectFormData(wasteForm);
+    await api('/wastes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    state.activeModal = null;
+    await loadDb();
+    render();
+    return;
   }
 
-  if (viewRequestsBtn) {
-    openRequestModal(viewRequestsBtn.dataset.viewRequests);
-  }
-
-  if (jumpRequestBtn) {
-    jumpToRequest(jumpRequestBtn.dataset.jumpRequest);
-  }
-
-  if (closeModalBtn || (modal && event.target === modal)) {
-    closeRequestModal();
-  }
-
-  if (expandEl && !event.target.closest('button') && !event.target.closest('input') && !event.target.closest('select')) {
-    const stocktakeId = expandEl.dataset.expandStocktake;
-    state.expandedStocktake = state.expandedStocktake === stocktakeId ? null : stocktakeId;
-    const view = state.config.views.find((v) => v.id === 'stocktakes');
-    if (view) refreshStocktakeList('stocktakes');
-  }
-
-  if (saveBtn) {
-    const stocktakeId = saveBtn.dataset.stocktakeSave;
-    const edits = state.stocktakeEdits[stocktakeId] || [];
-    try {
-      await api(`/api/stocktakes/${stocktakeId}/items`, {
+  const crudForm = e.target.closest('[data-crud-form]');
+  if (crudForm) {
+    e.preventDefault();
+    const collection = crudForm.dataset.crudForm;
+    const editId = crudForm.dataset.editId;
+    const data = collectFormData(crudForm);
+    if (editId) {
+      await api(`/${collection}/${editId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ items: edits })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
       });
-      await load();
-      state.expandedStocktake = stocktakeId;
-      refreshStocktakeList('stocktakes');
-      toast('录入已保存');
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  if (confirmBtn) {
-    const stocktakeId = confirmBtn.dataset.stocktakeConfirm;
-    const stocktake = state.db.stocktakes?.find((s) => s.id === stocktakeId);
-    if (!stocktake) return;
-    const itemsCount = (stocktake.items || []).length;
-    const diffSummary = computeStocktakeDiff(stocktake);
-    const diffMsg = diffSummary.surplusCount + diffSummary.deficitCount > 0
-      ? `\n\n将产生：盘盈${diffSummary.surplusCount}项(+${diffSummary.surplusQty})，盘亏${diffSummary.deficitCount}项(-${diffSummary.deficitQty})\n对应批次库存将被更新。`
-      : `\n\n无差异项，批次库存保持不变。`;
-    const ok = confirm(`确认盘点「${stocktake.code || stocktake.title}」？\n共${itemsCount}个批次。${diffMsg}\n\n确认后不可撤销。`);
-    if (!ok) return;
-    try {
-      await api(`/api/stocktakes/${stocktakeId}/confirm`, {
-        method: 'POST',
-        body: JSON.stringify({ confirmedBy: stocktake.operator })
-      });
-      await load();
-      state.expandedStocktake = stocktakeId;
-      refreshStocktakeList('stocktakes');
-      toast('盘点已确认，库存已同步更新');
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  if (expandWasteEl && !event.target.closest('button') && !event.target.closest('input') && !event.target.closest('select')) {
-    const wasteId = expandWasteEl.dataset.expandWaste;
-    state.expandedWaste = state.expandedWaste === wasteId ? null : wasteId;
-    refreshWasteList('wastes');
-  }
-
-  if (wasteApproveBtn) {
-    const wasteId = wasteApproveBtn.dataset.wasteApprove;
-    const waste = state.db.wastes?.find((w) => w.id === wasteId);
-    if (!waste) return;
-    const batch = state.db.batches?.find((b) => b.id === waste.batchId);
-    const unit = batch?.unit || '';
-    const ok = confirm(`审批通过报废申请「${waste.code || waste.title}」？\n申请报废：${waste.quantity}${unit}\n\n审批通过后进入待处置状态。`);
-    if (!ok) return;
-    try {
-      await api(`/api/wastes/${wasteId}/approve`, { method: 'POST' });
-      await load();
-      state.expandedWaste = wasteId;
-      refreshWasteList('wastes');
-      toast('审批已通过');
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  if (wasteDisposeBtn) {
-    const wasteId = wasteDisposeBtn.dataset.wasteDispose;
-    const waste = state.db.wastes?.find((w) => w.id === wasteId);
-    if (!waste) return;
-    const batch = state.db.batches?.find((b) => b.id === waste.batchId);
-    const unit = batch?.unit || '';
-    const edits = state.wasteEdits[wasteId] || {};
-    const actualQty = edits.actualQuantity ?? waste.quantity;
-    const ok = confirm(`确认处置报废单「${waste.code || waste.title}」？\n实际处置：${actualQty}${unit}\n\n确认后将扣减批次库存，不可撤销。`);
-    if (!ok) return;
-    try {
-      await api(`/api/wastes/${wasteId}/dispose`, {
-        method: 'POST',
-        body: JSON.stringify({
-          actualQuantity: actualQty,
-          disposalMethod: edits.disposalMethod || waste.disposalMethod,
-          witness: edits.witness || waste.witness,
-          operator: edits.operator
-        })
-      });
-      await load();
-      state.expandedWaste = wasteId;
-      refreshWasteList('wastes');
-      toast('处置已确认，库存已扣减');
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-});
-
-document.addEventListener('input', (event) => {
-  const crudView = state.config.views.find((entry) => entry.id && (event.target.id === `search-${entry.id}` || event.target.id === `status-${entry.id}`));
-  if (crudView) {
-    if (crudView.type === 'stocktake') {
-      refreshStocktakeList(crudView.id);
-    } else if (crudView.type === 'waste') {
-      refreshWasteList(crudView.id);
-    } else if (crudView.type === 'audit-logs') {
-      refreshAuditLogsList(crudView.id);
     } else {
-      const listEl = $(`#list-${crudView.id}`);
-      if (listEl) listEl.innerHTML = renderList(crudView);
+      await api(`/${collection}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
     }
-  }
-
-  const auditView = state.config.views.find((entry) => entry.id && (event.target.id === `action-type-${entry.id}` || event.target.id === `target-collection-${entry.id}`));
-  if (auditView && auditView.type === 'audit-logs') {
-    refreshAuditLogsList(auditView.id);
-  }
-
-  const stInput = event.target.closest('.st-input');
-  if (stInput) {
-    const stId = stInput.dataset.st;
-    const idx = Number(stInput.dataset.idx);
-    const field = stInput.dataset.field;
-    if (!state.stocktakeEdits[stId]) return;
-    const edit = state.stocktakeEdits[stId][idx];
-    if (!edit) return;
-    let val = stInput.value;
-    if (field === 'bookQuantity' || field === 'actualQuantity') {
-      val = Number(val || 0);
-    }
-    edit[field] = val;
-    edit.difference = Number(edit.actualQuantity ?? 0) - Number(edit.bookQuantity ?? 0);
-    const row = stInput.closest('.stocktake-row');
-    if (row) {
-      const batch = state.db.batches.find((b) => b.id === edit.batchId);
-      const diff = edit.difference;
-      const tone = diffTone(diff);
-      row.classList.remove('row-surplus', 'row-deficit');
-      if (tone) row.classList.add('row-' + tone);
-      const diffCell = row.querySelector('.diff-cell');
-      if (diffCell) {
-        diffCell.className = `diff-cell ${tone}`;
-        diffCell.textContent = diffLabel(diff);
-      }
-      const unit = batch?.unit || '';
-      row.querySelectorAll('.unit').forEach((u) => u.textContent = unit);
-    }
-    const stocktake = state.db.stocktakes?.find((s) => s.id === stId);
-    const summaryWrap = row.closest('.stocktake-detail')?.querySelector('.stocktake-summary');
-    if (stocktake && summaryWrap) {
-      const newSum = computeStocktakeDiff(stocktake);
-      const hasDiff = newSum.surplusCount + newSum.deficitCount > 0;
-      const diffPart = hasDiff ? `
-        <div class="diff-summary">
-          <span class="diff-stat surplus">盘盈：${newSum.surplusCount}项（+${newSum.surplusQty || 0}）</span>
-          <span class="diff-stat deficit">盘亏：${newSum.deficitCount}项（-${newSum.deficitQty || 0}）</span>
-        </div>
-      ` : `<div class="diff-summary"><span class="diff-stat consistent">所有批次账实一致</span></div>`;
-      summaryWrap.innerHTML = `
-        <div class="diff-stat">账面合计：${newSum.totalBook}　实盘合计：${newSum.totalActual}　净差异：${newSum.totalDiff >= 0 ? '+' : ''}${newSum.totalDiff}</div>
-        ${diffPart}
-      `;
-    }
-  }
-
-  const wasteInput = event.target.closest('.waste-input');
-  if (wasteInput) {
-    const wasteId = wasteInput.dataset.waste;
-    const field = wasteInput.dataset.field;
-    if (!state.wasteEdits[wasteId]) state.wasteEdits[wasteId] = {};
-    let val = wasteInput.value;
-    if (field === 'actualQuantity') {
-      val = Number(val || 0);
-    }
-    state.wasteEdits[wasteId][field] = val;
-  }
-});
-
-document.addEventListener('change', (event) => {
-  const select = event.target.closest('select[data-auto-fill]');
-  if (!select) return;
-  applyAutoFill(select);
-});
-
-document.addEventListener('submit', async (event) => {
-  const form = event.target.closest('[data-create]');
-  if (!form) return;
-  event.preventDefault();
-  const view = state.config.views.find((entry) => entry.id === form.dataset.view);
-  if (view?.type === 'stocktake' && form.dataset.stocktakeCreate !== undefined) {
-    const payload = values(form, view);
-    payload.status = '草稿';
-    payload.items = [];
-    payload.history = undefined;
-    try {
-      const created = await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(payload) });
-      form.reset();
-      await load();
-      state.expandedStocktake = created.id;
-      refreshStocktakeList('stocktakes');
-      toast('盘点单已创建，请展开并录入实盘数量');
-    } catch (err) {
-      toast(err.message);
-    }
+    state.activeModal = null;
+    await loadDb();
+    render();
     return;
   }
-  if (view?.type === 'waste' && form.dataset.wasteCreate !== undefined) {
-    const payload = values(form, view);
-    payload.status = view.defaults?.status || '待审批';
-    payload.history = undefined;
-    try {
-      const created = await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(payload) });
-      form.reset();
-      await load();
-      state.expandedWaste = created.id;
-      refreshWasteList('wastes');
-      toast('报废申请已提交，等待审批');
-    } catch (err) {
-      toast(err.message);
-    }
-    return;
-  }
-  await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(values(form, view)) });
-  form.reset();
-  await load();
-  toast('已保存');
 });
 
-$('#refreshBtn').addEventListener('click', () => load().then(() => toast('已刷新')));
+$('#refreshBtn').addEventListener('click', async () => {
+  await loadDb();
+  render();
+  toast('数据已刷新');
+});
 
 async function boot() {
-  state.config = await api('/api/config');
-  renderTabs();
-  await load();
+  try {
+    const res = await fetch('/api/config');
+    state.config = await res.json();
+    document.getElementById('title').textContent = state.config.title;
+    document.getElementById('lede').textContent = state.config.lede;
+
+    const savedUserId = localStorage.getItem(USER_STORAGE_KEY);
+    if (savedUserId) {
+      state.currentUser = state.config.users.find(u => u.id === savedUserId) || null;
+    }
+
+    state.activeTab = state.config.views[0].id;
+    state.activeView = state.config.views[0].id;
+    await loadDb();
+  } catch (err) {
+    console.error(err);
+    toast('启动失败：' + err.message);
+  }
 }
 
-boot().catch((error) => toast(error.message));
+boot();

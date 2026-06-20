@@ -1195,3 +1195,266 @@ main {
     padding: 4px 8px;
   }
 }
+
+/* 用户切换器样式 */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: all .15s ease;
+  user-select: none;
+  position: relative;
+}
+
+.user-chip:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.user-avatar.small {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.user-role {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.user-caret {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  transition: transform .15s ease;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(42, 37, 28, .18);
+  min-width: 240px;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.user-dropdown.hidden {
+  display: none;
+}
+
+.user-dropdown-title {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.login-user-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background .12s ease;
+  border-bottom: 1px solid rgba(216, 208, 194, .5);
+}
+
+.login-user-option:last-child {
+  border-bottom: none;
+}
+
+.login-user-option:hover {
+  background: rgba(17, 97, 92, .06);
+}
+
+.login-user-option.active {
+  background: rgba(17, 97, 92, .1);
+}
+
+.option-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.option-role {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* 登录要求页面 */
+.login-required {
+  min-height: 70vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(42, 37, 28, .18);
+  padding: 40px;
+  max-width: 460px;
+  width: 100%;
+}
+
+.login-card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  color: var(--ink);
+  text-align: center;
+}
+
+.login-subtitle {
+  margin: 0 0 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login-user-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.login-user-list .login-user-option {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #fff;
+  transition: all .15s ease;
+}
+
+.login-user-list .login-user-option:hover {
+  border-color: var(--accent);
+  transform: translateX(4px);
+  background: rgba(17, 97, 92, .04);
+}
+
+.login-tip {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  padding-top: 20px;
+  border-top: 1px dashed var(--line);
+}
+
+/* 无权限提示面板 */
+.no-permission-panel {
+  background: linear-gradient(135deg, rgba(163, 92, 0, .06), rgba(161, 61, 61, .06));
+  border: 2px dashed rgba(163, 92, 0, .4);
+  border-radius: 12px;
+  padding: 40px 28px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.no-permission-panel .icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.no-permission-panel h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--warn);
+}
+
+.no-permission-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.no-permission-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(163, 92, 0, .1);
+  color: var(--warn);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+button:disabled.no-perm-disabled {
+  position: relative;
+}
+
+@media (max-width: 620px) {
+  .user-chip {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .user-info {
+    display: none;
+  }
+
+  .user-caret {
+    display: none;
+  }
+
+  .login-card {
+    padding: 28px 20px;
+  }
+
+  .login-card h2 {
+    font-size: 20px;
+  }
+
+  .no-permission-panel {
+    padding: 28px 18px;
+  }
+}
