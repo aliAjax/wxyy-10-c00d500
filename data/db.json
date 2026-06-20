@@ -182,6 +182,102 @@
           "note": "入库120根"
         }
       ]
+    },
+    {
+      "id": "batch-alert-1",
+      "name": "舞台喷射礼花J15",
+      "category": "礼花",
+      "batchNo": "LH-J15-2606",
+      "cabinetId": "cabinet-seed-1",
+      "safetyLevel": "中",
+      "quantity": 0,
+      "unit": "发",
+      "expiresAt": "2026-07-10",
+      "supplierId": "supplier-seed-1",
+      "status": "已报废",
+      "createdAt": "2026-06-10T10:00:00.000Z",
+      "updatedAt": "2026-06-20T09:11:26.442Z",
+      "history": [
+        {
+          "at": "2026-06-20T09:11:26.442Z",
+          "action": "报废扣减",
+          "note": "报废单：BF-2026-003，报废数量：-5发，剩余库存：0发，库存清零，批次状态更新为已报废"
+        },
+        {
+          "at": "2026-06-20T09:11:26.417Z",
+          "action": "报废审批通过",
+          "note": "报废单：BF-2026-003，申请报废：5发"
+        },
+        {
+          "at": "2026-06-10T10:00:00.000Z",
+          "action": "创建",
+          "note": "入库5发"
+        }
+      ]
+    },
+    {
+      "id": "batch-alert-2",
+      "name": "冷焰火喷泉P20",
+      "category": "冷焰火",
+      "batchNo": "PY-P20-2508",
+      "cabinetId": "cabinet-seed-3",
+      "safetyLevel": "高",
+      "quantity": 10,
+      "unit": "支",
+      "expiresAt": "2026-05-20",
+      "supplierId": "supplier-seed-1",
+      "status": "可用",
+      "createdAt": "2025-08-15T09:00:00.000Z",
+      "updatedAt": "2026-06-20T09:09:42.087Z",
+      "history": [
+        {
+          "at": "2026-06-20T09:09:42.087Z",
+          "action": "报废扣减",
+          "note": "报废单：BF-2026-001，报废数量：-5支，剩余库存：10支"
+        },
+        {
+          "at": "2026-06-20T09:09:21.532Z",
+          "action": "报废审批通过",
+          "note": "报废单：BF-2026-001，申请报废：5支"
+        },
+        {
+          "at": "2026-05-20T09:00:00.000Z",
+          "action": "更新",
+          "note": "已过有效期"
+        },
+        {
+          "at": "2025-08-15T09:00:00.000Z",
+          "action": "创建",
+          "note": "入库15支"
+        }
+      ]
+    },
+    {
+      "id": "batch-alert-4",
+      "name": "高空礼花弹G12",
+      "category": "礼花",
+      "batchNo": "LH-G12-2510",
+      "cabinetId": "cabinet-seed-1",
+      "safetyLevel": "高",
+      "quantity": 20,
+      "unit": "发",
+      "expiresAt": "2027-03-10",
+      "supplierId": "supplier-seed-1",
+      "status": "锁定",
+      "createdAt": "2025-10-05T10:00:00.000Z",
+      "updatedAt": "2026-06-15T08:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-06-15T08:00:00.000Z",
+          "action": "锁定",
+          "note": "待质量复检"
+        },
+        {
+          "at": "2025-10-05T10:00:00.000Z",
+          "action": "创建",
+          "note": "入库20发"
+        }
+      ]
     }
   ],
   "requests": [
