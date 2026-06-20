@@ -8,17 +8,20 @@ module.exports = {
     '合作中': 'ok',
     '空闲': 'ok',
     '使用中': 'ok',
+    '已确认': 'ok',
     '锁定': 'warn',
     '待审批': 'warn',
     '已审批': 'warn',
     '已出库': 'warn',
     '已暂停': 'warn',
     '已满': 'warn',
+    '录入中': 'warn',
     '已过期': 'bad',
     '已报废': 'bad',
     '已驳回': 'bad',
     '资质过期': 'bad',
     '停用': 'bad',
+    '草稿': 'warn',
     '筹备中': 'warn',
     '进行中': 'ok',
     '已完成': 'ok',
@@ -29,7 +32,8 @@ module.exports = {
     requests: { label: '领用申请' },
     suppliers: { label: '供应商档案' },
     cabinets: { label: '柜位台账' },
-    projects: { label: '演出项目' }
+    projects: { label: '演出项目' },
+    stocktakes: { label: '库存盘点' }
   },
   stats: [
     { label: '药剂批次', collection: 'batches' },
@@ -41,7 +45,9 @@ module.exports = {
     { label: '供应商', collection: 'suppliers' },
     { label: '合作中', collection: 'suppliers', filter: { field: 'status', value: '合作中' } },
     { label: '演出项目', collection: 'projects' },
-    { label: '筹备中', collection: 'projects', filter: { field: 'status', value: '筹备中' } }
+    { label: '筹备中', collection: 'projects', filter: { field: 'status', value: '筹备中' } },
+    { label: '盘点单', collection: 'stocktakes' },
+    { label: '录入中盘点', collection: 'stocktakes', filter: { field: 'status', value: '录入中' } }
   ],
   views: [
     {
@@ -201,6 +207,28 @@ module.exports = {
         { label: '演出日期', name: 'showDate', type: 'date', required: true },
         { label: '风险等级', name: 'riskLevel', type: 'select', options: ['低', '中', '高'] },
         { label: '状态', name: 'status', type: 'select', options: ['筹备中', '进行中', '已完成', '已取消'], wide: true }
+      ]
+    },
+    {
+      id: 'stocktakes',
+      label: '库存盘点',
+      type: 'stocktake',
+      collection: 'stocktakes',
+      formTitle: '创建盘点单',
+      listTitle: '盘点单列表',
+      submitLabel: '创建盘点单',
+      searchPlaceholder: '搜索盘点单号、标题、操作员',
+      searchFields: ['code', 'title', 'operator', 'note'],
+      statusField: 'status',
+      statusOptions: ['草稿', '录入中', '已确认'],
+      titleFields: ['code', 'title'],
+      summaryFields: ['operator', 'note'],
+      fields: [
+        { label: '盘点单号', name: 'code', required: true },
+        { label: '盘点标题', name: 'title', required: true, wide: true },
+        { label: '盘点柜位', name: 'cabinetId', type: 'relation', collection: 'cabinets', labelFields: ['code', 'area'], wide: true },
+        { label: '操作员', name: 'operator', required: true },
+        { label: '盘点范围/备注', name: 'note', type: 'textarea', wide: true }
       ]
     }
   ],

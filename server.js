@@ -158,6 +158,113 @@ function runAction(db, action, item) {
   return { item };
 }
 
+app.post('/api/stocktakes/:id/confirm', async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const stocktake = db.stocktakes?.find((entry) => entry.id === id);
+  if (!stocktake) return res.status(404).json({ error: '盘点单不存在' });
+  if (stocktake.status === '已确认') return res.status(409).json({ error: '该盘点单已确认，不可重复确认' });
+  if (!Array.isArray(stocktake.items) || stocktake.items.length === 0) {
+    return res.status(409).json({ error: '盘点单还没有录入任何批次，请先完成录入' });
+  }
+
+  const now = new Date().toISOString();
+  const confirmedBy = req.body.confirmedBy || stocktake.operator || '系统';
+
+  let surplusCount = 0;
+  let deficitCount = 0;
+  let surplusQty = 0;
+  let deficitQty = 0;
+
+  for (const item of stocktake.items) {
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    if (!batch) continue;
+
+    const book = Number(item.bookQuantity ?? batch.quantity ?? 0);
+    const actual = Number(item.actualQuantity ?? 0);
+    const diff = actual - book;
+    item.difference = diff;
+    item.bookQuantity = book;
+    item.actualQuantity = actual;
+
+    if (diff !== 0) {
+      batch.quantity = actual;
+      batch.updatedAt = now;
+      batch.history = batch.history || [];
+      const diffText = diff > 0 ? `盘盈+${diff}${batch.unit || ''}` : `盘亏${diff}${batch.unit || ''}`;
+      const remarkText = item.remark ? `，原因：${item.remark}` : '';
+      batch.history.unshift(stamp('盘点调整', `${diffText}，盘点单：${stocktake.code || stocktake.id}${remarkText}`));
+
+      if (diff > 0) {
+        surplusCount++;
+        surplusQty += diff;
+      } else {
+        deficitCount++;
+        deficitQty += Math.abs(diff);
+      }
+    }
+  }
+
+  const diffCount = surplusCount + deficitCount;
+  stocktake.diffSummary = {
+    diffCount,
+    surplusCount,
+    deficitCount,
+    surplusQty,
+    deficitQty
+  };
+  stocktake.status = '已确认';
+  stocktake.confirmedAt = now;
+  stocktake.confirmedBy = confirmedBy;
+  stocktake.updatedAt = now;
+  stocktake.history = stocktake.history || [];
+
+  const noteParts = [];
+  noteParts.push(`差异项${diffCount}项`);
+  if (surplusCount) noteParts.push(`盘盈${surplusCount}项(+${surplusQty})`);
+  if (deficitCount) noteParts.push(`盘亏${deficitCount}项(-${deficitQty})`);
+  noteParts.push('已同步更新批次库存');
+  stocktake.history.unshift(stamp('确认', noteParts.join('，')));
+
+  await writeDb(db);
+  res.json(stocktake);
+});
+
+app.patch('/api/stocktakes/:id/items', async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const stocktake = db.stocktakes?.find((entry) => entry.id === id);
+  if (!stocktake) return res.status(404).json({ error: '盘点单不存在' });
+  if (stocktake.status === '已确认') return res.status(409).json({ error: '已确认的盘点单不能修改录入' });
+
+  const { items, operator } = req.body;
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items 必须是数组' });
+
+  const now = new Date().toISOString();
+  stocktake.items = items.map((item) => {
+    const batch = db.batches.find((b) => b.id === item.batchId);
+    const book = Number(item.bookQuantity ?? batch?.quantity ?? 0);
+    const actual = Number(item.actualQuantity ?? book);
+    return {
+      batchId: item.batchId,
+      bookQuantity: book,
+      actualQuantity: actual,
+      difference: actual - book,
+      remark: item.remark || ''
+    };
+  });
+
+  stocktake.status = stocktake.items.length > 0 ? '录入中' : '草稿';
+  stocktake.updatedAt = now;
+  stocktake.history = stocktake.history || [];
+
+  const diffItems = stocktake.items.filter((i) => i.difference !== 0).length;
+  stocktake.history.unshift(stamp('录入', `录入${stocktake.items.length}个批次，差异${diffItems}项`));
+
+  await writeDb(db);
+  res.json(stocktake);
+});
+
 app.listen(PORT, () => {
   console.log(`${config.title} running at http://localhost:${PORT}`);
 });

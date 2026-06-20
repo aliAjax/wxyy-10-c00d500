@@ -1,7 +1,9 @@
 const state = {
   config: null,
   db: {},
-  activeTab: ''
+  activeTab: '',
+  expandedStocktake: null,
+  stocktakeEdits: {}
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -92,7 +94,7 @@ function formField(field) {
   if (field.type === 'relation') {
     const items = state.db[field.collection] || [];
     const autoFillAttr = field.autoFill ? `data-auto-fill='${JSON.stringify(field.autoFill)}' data-collection="${field.collection}"` : '';
-    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required} ${autoFillAttr}>${optionList(items, field.labelFields)}</select></label>`;
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required} ${autoFillAttr}><option value="">请选择</option>${optionList(items, field.labelFields)}</select></label>`;
   }
   return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${required}></label>`;
 }
@@ -233,6 +235,211 @@ function renderCrudView(view) {
   </section>`;
 }
 
+function diffTone(diff) {
+  if (diff > 0) return 'surplus';
+  if (diff < 0) return 'deficit';
+  return '';
+}
+
+function diffLabel(diff) {
+  if (diff > 0) return `盘盈 +${diff}`;
+  if (diff < 0) return `盘亏 ${diff}`;
+  return '一致';
+}
+
+function computeStocktakeDiff(stocktake) {
+  const items = state.stocktakeEdits[stocktake.id] || stocktake.items || [];
+  let surplusCount = 0;
+  let deficitCount = 0;
+  let surplusQty = 0;
+  let deficitQty = 0;
+  let totalBook = 0;
+  let totalActual = 0;
+  items.forEach((it) => {
+    const book = Number(it.bookQuantity ?? 0);
+    const actual = Number(it.actualQuantity ?? 0);
+    const diff = actual - book;
+    totalBook += book;
+    totalActual += actual;
+    if (diff > 0) {
+      surplusCount++;
+      surplusQty += diff;
+    } else if (diff < 0) {
+      deficitCount++;
+      deficitQty += Math.abs(diff);
+    }
+  });
+  return { surplusCount, deficitCount, surplusQty, deficitQty, totalBook, totalActual, totalDiff: totalActual - totalBook };
+}
+
+function renderStocktakeDiffSummary(stocktake) {
+  const computed = computeStocktakeDiff(stocktake);
+  const summary = stocktake.diffSummary ? { ...computed, ...stocktake.diffSummary } : computed;
+  const hasDiff = summary.surplusCount + summary.deficitCount > 0;
+  const diffPart = hasDiff ? `
+    <div class="diff-summary">
+      <span class="diff-stat surplus">盘盈：${summary.surplusCount}项（+${summary.surplusQty || 0}）</span>
+      <span class="diff-stat deficit">盘亏：${summary.deficitCount}项（-${summary.deficitQty || 0}）</span>
+    </div>
+  ` : `<div class="diff-summary"><span class="diff-stat consistent">所有批次账实一致</span></div>`;
+  const netDiff = summary.totalDiff ?? summary.surplusQty - summary.deficitQty;
+  return `
+    <div class="stocktake-summary">
+      <div class="diff-stat">账面合计：${summary.totalBook ?? '-'}　实盘合计：${summary.totalActual ?? '-'}　净差异：${netDiff >= 0 ? '+' : ''}${netDiff}</div>
+      ${diffPart}
+    </div>
+  `;
+}
+
+function renderStocktakeItemRows(stocktake) {
+  const confirmed = stocktake.status === '已确认';
+  const edits = state.stocktakeEdits[stocktake.id] || stocktake.items || [];
+  const savedMap = {};
+  (stocktake.items || []).forEach((it) => { savedMap[it.batchId] = it; });
+
+  let targetBatches = state.db.batches || [];
+  if (stocktake.cabinetId) {
+    targetBatches = targetBatches.filter((b) => b.cabinetId === stocktake.cabinetId);
+  }
+
+  const existingIds = new Set(edits.map((e) => e.batchId));
+  targetBatches.forEach((b) => {
+    if (!existingIds.has(b.id)) {
+      edits.push({
+        batchId: b.id,
+        bookQuantity: b.quantity,
+        actualQuantity: b.quantity,
+        difference: 0,
+        remark: ''
+      });
+      existingIds.add(b.id);
+    }
+  });
+
+  state.stocktakeEdits[stocktake.id] = edits;
+
+  if (!edits.length) return '<div class="empty">暂无待盘点批次</div>';
+
+  return edits.map((item, idx) => {
+    const batch = state.db.batches.find((b) => b.id === item.batchId);
+    if (!batch) return '';
+    const book = Number(item.bookQuantity ?? batch.quantity ?? 0);
+    const actual = Number(item.actualQuantity ?? book);
+    const diff = actual - book;
+    const rowTone = diffTone(diff);
+    const diffHtml = `<span class="diff-cell ${rowTone}">${escapeHtml(diffLabel(diff))}</span>`;
+    const inputAttrs = confirmed ? 'readonly disabled' : '';
+    return `
+      <tr class="stocktake-row ${rowTone ? 'row-' + rowTone : ''}">
+        <td>
+          <div><strong>${escapeHtml(batch.name)}</strong> ${pill(batch.safetyLevel, toneFor(batch.safetyLevel))}</div>
+          <div class="meta">批次：${escapeHtml(batch.batchNo)}　柜位：${escapeHtml(relationLabel({ collection: 'cabinets', labelFields: ['code'] }, batch.cabinetId))}</div>
+        </td>
+        <td class="num-cell">
+          <input type="number" class="st-input book-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="bookQuantity" value="${book}" ${inputAttrs} min="0">
+          <span class="unit">${escapeHtml(batch.unit || '')}</span>
+        </td>
+        <td class="num-cell">
+          <input type="number" class="st-input actual-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="actualQuantity" value="${actual}" ${inputAttrs} min="0">
+          <span class="unit">${escapeHtml(batch.unit || '')}</span>
+        </td>
+        <td class="num-cell">${diffHtml}</td>
+        <td>
+          <input type="text" class="st-input remark-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="remark" value="${escapeHtml(item.remark || '')}" ${confirmed ? 'readonly disabled' : ''} placeholder="差异原因...">
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderStocktakeCard(stocktake, view) {
+  const isExpanded = state.expandedStocktake === stocktake.id;
+  const title = view.titleFields.map((f) => stocktake[f]).filter(Boolean).join(' / ') || stocktake.id;
+  const summary = (view.summaryFields || []).map((f) => stocktake[f]).filter(Boolean).join(' · ');
+  const confirmed = stocktake.status === '已确认';
+  const cabinetLabel = stocktake.cabinetId ? `范围：${escapeHtml(relationLabel({ collection: 'cabinets', labelFields: ['code', 'area'] }, stocktake.cabinetId))}` : '范围：全部柜位';
+  const diffHtml = (stocktake.items || []).length || state.stocktakeEdits[stocktake.id]?.length ? renderStocktakeDiffSummary(stocktake) : '';
+
+  let expandContent = '';
+  if (isExpanded) {
+    const actions = confirmed ? '' : `
+      <div class="stocktake-actions">
+        <button class="ghost" data-stocktake-save="${stocktake.id}">保存录入</button>
+        <button class="secondary" data-stocktake-confirm="${stocktake.id}" ${!stocktake.items || !stocktake.items.length ? 'disabled' : ''}>确认盘点并更新库存</button>
+      </div>
+    `;
+    expandContent = `
+      <div class="stocktake-detail">
+        ${confirmed && stocktake.confirmedAt ? `<div class="meta">确认人：${escapeHtml(stocktake.confirmedBy || '-')}　确认时间：${fmtDate(stocktake.confirmedAt)}</div>` : ''}
+        ${diffHtml}
+        <table class="stocktake-table">
+          <thead>
+            <tr><th>药剂批次</th><th>账面数量</th><th>实盘数量</th><th>差异</th><th>备注/原因</th></tr>
+          </thead>
+          <tbody>
+            ${renderStocktakeItemRows(stocktake)}
+          </tbody>
+        </table>
+        ${actions}
+      </div>
+    `;
+  }
+
+  return `<article class="card stocktake-card">
+    <div class="card-head" data-expand-stocktake="${stocktake.id}" style="cursor:pointer;">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <div class="meta">${cabinetLabel}　${summary ? escapeHtml(summary) : ''}</div>
+        ${diffHtml && !isExpanded ? `<div class="stocktake-card-summary">${diffHtml}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${pill(stocktake.status, toneFor(stocktake.status))}
+        <span class="meta">${(stocktake.items || []).length ? stocktake.items.length + '个批次' : '未录入'}</span>
+        <span class="meta">${isExpanded ? '▲ 收起' : '▼ 展开详情'}</span>
+      </div>
+    </div>
+    ${expandContent}
+    ${historyHtml(stocktake)}
+  </article>`;
+}
+
+function renderStocktakeList(view) {
+  const query = $(`#search-${view.id}`)?.value.trim() || '';
+  const status = $(`#status-${view.id}`)?.value || '';
+  let items = [...(state.db[view.collection] || [])];
+  if (query) {
+    items = items.filter((item) => view.searchFields.some((field) => String(item[field] || '').includes(query)));
+  }
+  if (status) {
+    items = items.filter((item) => item[view.statusField] === status);
+  }
+  return items.length ? items.map((item) => renderStocktakeCard(item, view)).join('') : `<div class="empty">暂无盘点单</div>`;
+}
+
+function renderStocktakeView(view) {
+  const statusOptions = view.statusOptions || [];
+  return `<section class="view" id="${view.id}">
+    <div class="grid">
+      <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-stocktake-create>
+        <h2>${escapeHtml(view.formTitle)}</h2>
+        <div class="form-grid">${view.fields.map(formField).join('')}</div>
+        <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
+      </form>
+      <div class="panel">
+        <h2>${escapeHtml(view.listTitle)}</h2>
+        <div class="toolbar">
+          <input id="search-${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}">
+          <select id="status-${view.id}">
+            <option value="">全部状态</option>
+            ${statusOptions.map((option) => `<option>${escapeHtml(option)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="list" id="list-${view.id}">${renderStocktakeList(view)}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function applyAutoFill(select) {
   const form = select.closest('form');
   if (!form) return;
@@ -256,9 +463,20 @@ function render() {
   $('#title').textContent = state.config.title;
   document.title = state.config.title;
   $('#lede').textContent = state.config.lede;
-  $('#main').innerHTML = state.config.views.map((view) => view.type === 'dashboard' ? renderDashboardView(view) : renderCrudView(view)).join('');
+  $('#main').innerHTML = state.config.views.map((view) => {
+    if (view.type === 'dashboard') return renderDashboardView(view);
+    if (view.type === 'stocktake') return renderStocktakeView(view);
+    return renderCrudView(view);
+  }).join('');
   setTab(state.activeTab || state.config.views[0].id);
   initializeAutoFillFields();
+}
+
+function refreshStocktakeList(viewId) {
+  const view = state.config.views.find((v) => v.id === viewId);
+  if (!view) return;
+  const listEl = $(`#list-${viewId}`);
+  if (listEl) listEl.innerHTML = renderStocktakeList(view);
 }
 
 async function load() {
@@ -269,7 +487,12 @@ async function load() {
 document.addEventListener('click', async (event) => {
   const tab = event.target.closest('.tab');
   const action = event.target.closest('[data-action]');
+  const expandEl = event.target.closest('[data-expand-stocktake]');
+  const saveBtn = event.target.closest('[data-stocktake-save]');
+  const confirmBtn = event.target.closest('[data-stocktake-confirm]');
+
   if (tab) setTab(tab.dataset.tab);
+
   if (action) {
     try {
       await api(`/api/action/${action.dataset.action}/${action.dataset.id}`, { method: 'POST' });
@@ -279,11 +502,114 @@ document.addEventListener('click', async (event) => {
       toast(error.message);
     }
   }
+
+  if (expandEl && !event.target.closest('button') && !event.target.closest('input') && !event.target.closest('select')) {
+    const stocktakeId = expandEl.dataset.expandStocktake;
+    state.expandedStocktake = state.expandedStocktake === stocktakeId ? null : stocktakeId;
+    const view = state.config.views.find((v) => v.id === 'stocktakes');
+    if (view) refreshStocktakeList('stocktakes');
+  }
+
+  if (saveBtn) {
+    const stocktakeId = saveBtn.dataset.stocktakeSave;
+    const edits = state.stocktakeEdits[stocktakeId] || [];
+    try {
+      await api(`/api/stocktakes/${stocktakeId}/items`, {
+        method: 'PATCH',
+        body: JSON.stringify({ items: edits })
+      });
+      await load();
+      state.expandedStocktake = stocktakeId;
+      refreshStocktakeList('stocktakes');
+      toast('录入已保存');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  if (confirmBtn) {
+    const stocktakeId = confirmBtn.dataset.stocktakeConfirm;
+    const stocktake = state.db.stocktakes?.find((s) => s.id === stocktakeId);
+    if (!stocktake) return;
+    const itemsCount = (stocktake.items || []).length;
+    const diffSummary = computeStocktakeDiff(stocktake);
+    const diffMsg = diffSummary.surplusCount + diffSummary.deficitCount > 0
+      ? `\n\n将产生：盘盈${diffSummary.surplusCount}项(+${diffSummary.surplusQty})，盘亏${diffSummary.deficitCount}项(-${diffSummary.deficitQty})\n对应批次库存将被更新。`
+      : `\n\n无差异项，批次库存保持不变。`;
+    const ok = confirm(`确认盘点「${stocktake.code || stocktake.title}」？\n共${itemsCount}个批次。${diffMsg}\n\n确认后不可撤销。`);
+    if (!ok) return;
+    try {
+      await api(`/api/stocktakes/${stocktakeId}/confirm`, {
+        method: 'POST',
+        body: JSON.stringify({ confirmedBy: stocktake.operator })
+      });
+      await load();
+      state.expandedStocktake = stocktakeId;
+      refreshStocktakeList('stocktakes');
+      toast('盘点已确认，库存已同步更新');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
 });
 
 document.addEventListener('input', (event) => {
-  const view = state.config.views.find((entry) => entry.id && (event.target.id === `search-${entry.id}` || event.target.id === `status-${entry.id}`));
-  if (view) $(`#list-${view.id}`).innerHTML = renderList(view);
+  const crudView = state.config.views.find((entry) => entry.id && (event.target.id === `search-${entry.id}` || event.target.id === `status-${entry.id}`));
+  if (crudView) {
+    if (crudView.type === 'stocktake') {
+      refreshStocktakeList(crudView.id);
+    } else {
+      const listEl = $(`#list-${crudView.id}`);
+      if (listEl) listEl.innerHTML = renderList(crudView);
+    }
+  }
+
+  const stInput = event.target.closest('.st-input');
+  if (stInput) {
+    const stId = stInput.dataset.st;
+    const idx = Number(stInput.dataset.idx);
+    const field = stInput.dataset.field;
+    if (!state.stocktakeEdits[stId]) return;
+    const edit = state.stocktakeEdits[stId][idx];
+    if (!edit) return;
+    let val = stInput.value;
+    if (field === 'bookQuantity' || field === 'actualQuantity') {
+      val = Number(val || 0);
+    }
+    edit[field] = val;
+    edit.difference = Number(edit.actualQuantity ?? 0) - Number(edit.bookQuantity ?? 0);
+    const row = stInput.closest('.stocktake-row');
+    if (row) {
+      const batch = state.db.batches.find((b) => b.id === edit.batchId);
+      const diff = edit.difference;
+      const tone = diffTone(diff);
+      row.classList.remove('row-surplus', 'row-deficit');
+      if (tone) row.classList.add('row-' + tone);
+      const diffCell = row.querySelector('.diff-cell');
+      if (diffCell) {
+        diffCell.className = `diff-cell ${tone}`;
+        diffCell.textContent = diffLabel(diff);
+      }
+      const unit = batch?.unit || '';
+      row.querySelectorAll('.unit').forEach((u) => u.textContent = unit);
+    }
+    const stocktake = state.db.stocktakes?.find((s) => s.id === stId);
+    const summaryWrap = row.closest('.stocktake-detail')?.querySelector('.stocktake-summary');
+    if (stocktake && summaryWrap) {
+      const newSum = computeStocktakeDiff(stocktake);
+      const hasDiff = newSum.surplusCount + newSum.deficitCount > 0;
+      const diffPart = hasDiff ? `
+        <div class="diff-summary">
+          <span class="diff-stat surplus">盘盈：${newSum.surplusCount}项（+${newSum.surplusQty || 0}）</span>
+          <span class="diff-stat deficit">盘亏：${newSum.deficitCount}项（-${newSum.deficitQty || 0}）</span>
+        </div>
+      ` : `<div class="diff-summary"><span class="diff-stat consistent">所有批次账实一致</span></div>`;
+      summaryWrap.innerHTML = `
+        <div class="diff-stat">账面合计：${newSum.totalBook}　实盘合计：${newSum.totalActual}　净差异：${newSum.totalDiff >= 0 ? '+' : ''}${newSum.totalDiff}</div>
+        ${diffPart}
+      `;
+    }
+  }
 });
 
 document.addEventListener('change', (event) => {
@@ -297,6 +623,23 @@ document.addEventListener('submit', async (event) => {
   if (!form) return;
   event.preventDefault();
   const view = state.config.views.find((entry) => entry.id === form.dataset.view);
+  if (view?.type === 'stocktake' && form.dataset.stocktakeCreate !== undefined) {
+    const payload = values(form, view);
+    payload.status = '草稿';
+    payload.items = [];
+    payload.history = undefined;
+    try {
+      const created = await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(payload) });
+      form.reset();
+      await load();
+      state.expandedStocktake = created.id;
+      refreshStocktakeList('stocktakes');
+      toast('盘点单已创建，请展开并录入实盘数量');
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
   await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(values(form, view)) });
   form.reset();
   await load();

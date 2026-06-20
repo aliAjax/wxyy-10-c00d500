@@ -91,6 +91,104 @@
           "note": "入库18罐"
         }
       ]
+    },
+    {
+      "id": "batch-seed-2",
+      "name": "高空喷射礼花B03",
+      "category": "礼花",
+      "batchNo": "LH-B03-2604",
+      "cabinetId": "cabinet-seed-1",
+      "safetyLevel": "高",
+      "quantity": 25,
+      "unit": "发",
+      "expiresAt": "2027-04-15",
+      "supplierId": "supplier-seed-1",
+      "status": "可用",
+      "createdAt": "2026-05-20T10:00:00.000Z",
+      "updatedAt": "2026-05-20T10:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-05-20T10:00:00.000Z",
+          "action": "创建",
+          "note": "入库25发"
+        }
+      ]
+    },
+    {
+      "id": "batch-seed-3",
+      "name": "舞台喷泉烟花S12",
+      "category": "喷泉烟花",
+      "batchNo": "PQ-S12-2603",
+      "cabinetId": "cabinet-seed-2",
+      "safetyLevel": "中",
+      "quantity": 36,
+      "unit": "支",
+      "expiresAt": "2027-01-20",
+      "supplierId": "supplier-seed-1",
+      "status": "可用",
+      "createdAt": "2026-05-25T14:00:00.000Z",
+      "updatedAt": "2026-06-20T07:35:10.519Z",
+      "history": [
+        {
+          "at": "2026-06-20T07:35:10.519Z",
+          "action": "盘点调整",
+          "note": "盘亏-4支，盘点单：PD-2026-002，原因：B区盘点少4支，已报告"
+        },
+        {
+          "at": "2026-05-25T14:00:00.000Z",
+          "action": "创建",
+          "note": "入库40支"
+        }
+      ]
+    },
+    {
+      "id": "batch-seed-4",
+      "name": "旋转风车烟花F08",
+      "category": "烟花",
+      "batchNo": "YH-F08-2601",
+      "cabinetId": "cabinet-seed-3",
+      "safetyLevel": "低",
+      "quantity": 60,
+      "unit": "个",
+      "expiresAt": "2026-12-31",
+      "supplierId": "supplier-seed-1",
+      "status": "可用",
+      "createdAt": "2026-04-10T08:30:00.000Z",
+      "updatedAt": "2026-04-10T08:30:00.000Z",
+      "history": [
+        {
+          "at": "2026-04-10T08:30:00.000Z",
+          "action": "创建",
+          "note": "入库60个"
+        }
+      ]
+    },
+    {
+      "id": "batch-seed-5",
+      "name": "手持冷焰火棒H05",
+      "category": "冷焰火",
+      "batchNo": "PY-H05-2602",
+      "cabinetId": "cabinet-seed-2",
+      "safetyLevel": "中",
+      "quantity": 122,
+      "unit": "根",
+      "expiresAt": "2026-11-30",
+      "supplierId": "supplier-seed-1",
+      "status": "可用",
+      "createdAt": "2026-05-01T11:00:00.000Z",
+      "updatedAt": "2026-06-20T07:35:10.519Z",
+      "history": [
+        {
+          "at": "2026-06-20T07:35:10.519Z",
+          "action": "盘点调整",
+          "note": "盘盈+2根，盘点单：PD-2026-002，原因：退库漏登2根"
+        },
+        {
+          "at": "2026-05-01T11:00:00.000Z",
+          "action": "创建",
+          "note": "入库120根"
+        }
+      ]
     }
   ],
   "requests": [
@@ -202,6 +300,114 @@
           "note": "建立供应商档案"
         }
       ]
+    }
+  ],
+  "stocktakes": [
+    {
+      "id": "stocktake-seed-1",
+      "code": "PD-2026-001",
+      "title": "6月中旬月度盘点（A区危险品库房）",
+      "cabinetId": "cabinet-seed-1",
+      "operator": "张伟",
+      "note": "针对A区危险品库房防爆柜B-2进行月度盘点",
+      "status": "已确认",
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "bookQuantity": 20,
+          "actualQuantity": 18,
+          "difference": -2,
+          "remark": "实际盘点少2罐，可能出库未及时销账"
+        },
+        {
+          "batchId": "batch-seed-2",
+          "bookQuantity": 22,
+          "actualQuantity": 25,
+          "difference": 3,
+          "remark": "实际多3发，怀疑退库漏登"
+        }
+      ],
+      "diffSummary": {
+        "diffCount": 2,
+        "surplusCount": 1,
+        "deficitCount": 1,
+        "surplusQty": 3,
+        "deficitQty": 2
+      },
+      "confirmedAt": "2026-06-15T10:30:00.000Z",
+      "confirmedBy": "张伟",
+      "createdAt": "2026-06-14T08:00:00.000Z",
+      "updatedAt": "2026-06-15T10:30:00.000Z",
+      "history": [
+        {
+          "at": "2026-06-15T10:30:00.000Z",
+          "action": "确认",
+          "note": "盘点确认：盘盈1项(+3发)，盘亏1项(-2罐)，已更新批次库存"
+        },
+        {
+          "at": "2026-06-14T14:20:00.000Z",
+          "action": "录入",
+          "note": "完成2个批次实盘数量录入"
+        },
+        {
+          "at": "2026-06-14T08:00:00.000Z",
+          "action": "创建",
+          "note": "创建盘点单，范围：防爆柜B-2"
+        }
+      ]
+    },
+    {
+      "id": "stocktakes-1781940884530-1583f",
+      "code": "PD-2026-002",
+      "title": "6月下旬周度盘点（B区中转暂存间）",
+      "cabinetId": "cabinet-seed-2",
+      "operator": "李明",
+      "note": "B区中转暂存间周度盘点",
+      "createdAt": "2026-06-20T07:34:44.530Z",
+      "updatedAt": "2026-06-20T07:35:10.519Z",
+      "history": [
+        {
+          "at": "2026-06-20T07:35:10.519Z",
+          "action": "确认",
+          "note": "差异项2项，盘盈1项(+2)，盘亏1项(-4)，已同步更新批次库存"
+        },
+        {
+          "at": "2026-06-20T07:34:58.439Z",
+          "action": "录入",
+          "note": "录入2个批次，差异2项"
+        },
+        {
+          "at": "2026-06-20T07:34:44.530Z",
+          "action": "创建",
+          "note": "B区中转暂存间周度盘点"
+        }
+      ],
+      "items": [
+        {
+          "batchId": "batch-seed-3",
+          "bookQuantity": 40,
+          "actualQuantity": 36,
+          "difference": -4,
+          "remark": "B区盘点少4支，已报告"
+        },
+        {
+          "batchId": "batch-seed-5",
+          "bookQuantity": 120,
+          "actualQuantity": 122,
+          "difference": 2,
+          "remark": "退库漏登2根"
+        }
+      ],
+      "status": "已确认",
+      "diffSummary": {
+        "diffCount": 2,
+        "surplusCount": 1,
+        "deficitCount": 1,
+        "surplusQty": 2,
+        "deficitQty": 4
+      },
+      "confirmedAt": "2026-06-20T07:35:10.519Z",
+      "confirmedBy": "李明"
     }
   ]
 }
