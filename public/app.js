@@ -1496,7 +1496,7 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  const userChip = e.target.closest('#userChip');
+  const userChip = e.target.closest('.user-chip');
   if (userChip) {
     const dd = $('#userDropdown');
     if (dd) dd.classList.toggle('hidden');
@@ -1508,9 +1508,9 @@ document.addEventListener('click', async (e) => {
     }
   }
 
-  const openWasteFromBatch = e.target.closest('[data-open-waste-from-batch]');
+  const openWasteFromBatch = e.target.closest('[data-create-waste-from-batch]');
   if (openWasteFromBatch) {
-    const batchId = openWasteFromBatch.dataset.openWasteFromBatch;
+    const batchId = openWasteFromBatch.dataset.createWasteFromBatch;
     state.activeView = 'wastes';
     state.activeModal = { collection: 'wastes', prefill: { batchId } };
     render();
@@ -1527,7 +1527,7 @@ document.addEventListener('click', async (e) => {
   const importPreview = e.target.closest('[data-import-preview]');
   if (importPreview) {
     e.preventDefault();
-    const textarea = document.getElementById('import-textarea');
+    const textarea = document.getElementById('csv-input');
     const raw = textarea ? textarea.value : '';
     try {
       const parsed = parseImportText(raw);
