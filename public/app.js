@@ -165,8 +165,12 @@ function renderCard(item, collection, view) {
     return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
   }).join('');
   const summary = (view.summaryFields || []).map((field) => item[field]).filter(Boolean).join(' · ');
-  const actions = state.config.actions
-    .filter((action) => action.collection === collection)
+  let actions = state.config.actions
+    .filter((action) => action.collection === collection);
+  if (collection === 'batches' && Number(item.quantity || 0) > 0) {
+    actions = actions.filter((action) => action.id !== 'batch-waste');
+  }
+  actions = actions
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${item.id}">${escapeHtml(action.label)}</button>`)
     .join('');
   const extraActions = collection === 'batches' && item.status !== '已报废'
@@ -282,8 +286,12 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
 
   const extraBadge = extraInfo ? `<span class="pill bad" style="margin-top:6px;">${escapeHtml(extraInfo)}</span>` : '';
 
-  const actions = state.config.actions
-    .filter((action) => action.collection === 'batches')
+  let actions = state.config.actions
+    .filter((action) => action.collection === 'batches');
+  if (Number(batch.quantity || 0) > 0) {
+    actions = actions.filter((action) => action.id !== 'batch-waste');
+  }
+  actions = actions
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${batch.id}">${escapeHtml(action.label)}</button>`)
     .join('');
 

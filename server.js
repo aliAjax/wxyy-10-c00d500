@@ -47,14 +47,37 @@ app.post('/api/:collection', async (req, res) => {
   const db = await readDb();
   const { collection } = req.params;
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
+
   const now = new Date().toISOString();
-  const item = {
-    id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
-    ...req.body,
-    createdAt: now,
-    updatedAt: now,
-    history: [stamp('创建', req.body.note || req.body.memo || '')]
-  };
+  let item;
+
+  if (collection === 'wastes') {
+    const batch = db.batches.find((b) => b.id === req.body.batchId);
+    if (!batch) return res.status(409).json({ error: '批次不存在' });
+    if (batch.status === '已报废') return res.status(409).json({ error: '该批次已报废，无法创建报废单' });
+    const wasteQty = Number(req.body.quantity || 0);
+    const stockQty = Number(batch.quantity || 0);
+    if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
+    if (wasteQty > stockQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过当前库存(${stockQty})` });
+    item = {
+      id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      ...req.body,
+      status: '待审批',
+      actualQuantity: 0,
+      createdAt: now,
+      updatedAt: now,
+      history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`)]
+    };
+  } else {
+    item = {
+      id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      ...req.body,
+      createdAt: now,
+      updatedAt: now,
+      history: [stamp('创建', req.body.note || req.body.memo || '')]
+    };
+  }
+
   db[collection].push(item);
   await writeDb(db);
   res.status(201).json(item);
@@ -66,6 +89,26 @@ app.patch('/api/:collection/:id', async (req, res) => {
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
   const item = db[collection].find((entry) => entry.id === id);
   if (!item) return res.status(404).json({ error: 'not found' });
+
+  if (collection === 'wastes') {
+    const protectedFields = ['status', 'actualQuantity', 'approver', 'approvedAt', 'disposedBy', 'disposedAt', 'disposalMethod', 'witness'];
+    const hasProtected = protectedFields.some(f => f in req.body);
+    if (hasProtected) {
+      return res.status(409).json({ error: '报废单状态和处置信息不能直接修改，请走正规审批流程' });
+    }
+    if (item.status !== '待审批' && item.status !== '已驳回') {
+      return res.status(409).json({ error: '只有待审批或已驳回状态的报废单可以编辑' });
+    }
+    if (req.body.quantity !== undefined) {
+      const batch = db.batches.find((b) => b.id === (req.body.batchId || item.batchId));
+      if (!batch) return res.status(409).json({ error: '批次不存在' });
+      const newQty = Number(req.body.quantity || 0);
+      const stockQty = Number(batch.quantity || 0);
+      if (newQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
+      if (newQty > stockQty) return res.status(409).json({ error: `报废数量(${newQty})超过当前库存(${stockQty})` });
+    }
+  }
+
   const historyAction = req.body.historyAction;
   delete req.body.historyAction;
   Object.assign(item, req.body, { updatedAt: new Date().toISOString() });
@@ -81,6 +124,15 @@ app.delete('/api/:collection/:id', async (req, res) => {
   const db = await readDb();
   const { collection, id } = req.params;
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
+
+  if (collection === 'wastes') {
+    const item = db[collection].find((entry) => entry.id === id);
+    if (!item) return res.status(404).json({ error: 'not found' });
+    if (item.status === '待处置' || item.status === '已处置') {
+      return res.status(409).json({ error: '待处置或已处置的报废单不能删除' });
+    }
+  }
+
   const before = db[collection].length;
   db[collection] = db[collection].filter((entry) => entry.id !== id);
   if (db[collection].length === before) return res.status(404).json({ error: 'not found' });
@@ -108,6 +160,9 @@ function preActionCheck(db, action, item) {
     const openRequests = (db.requests || []).filter((r) => r.batchId === item.id && openStatuses.includes(r.status));
     if (action.id === 'batch-waste' && openRequests.length > 0) {
       return { error: `该批次存在 ${openRequests.length} 个未闭环申请，无法直接报废，请先处理申请` };
+    }
+    if (action.id === 'batch-waste' && Number(item.quantity || 0) > 0) {
+      return { error: '该批次还有库存，请通过报废单流程完成报废处置' };
     }
   }
   return {};
