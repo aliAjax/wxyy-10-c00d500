@@ -3,7 +3,8 @@ const state = {
   db: {},
   activeTab: '',
   expandedStocktake: null,
-  stocktakeEdits: {}
+  stocktakeEdits: {},
+  highlightRequestId: null
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -165,7 +166,7 @@ function renderCard(item, collection, view) {
     .filter((action) => action.collection === collection)
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${item.id}">${escapeHtml(action.label)}</button>`)
     .join('');
-  return `<article class="card">
+  return `<article class="card" data-collection="${collection}" data-id="${item.id}">
     <div class="card-head"><h3>${escapeHtml(title)}</h3>${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}</div>
     ${relation}
     ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
@@ -693,6 +694,9 @@ function openRequestModal(batchId) {
           <div class="meta">数量：${r.quantity} ${escapeHtml(batch.unit || '')}　操作：${escapeHtml(r.operator || '-')}</div>
           <div class="meta">项目：${escapeHtml(projectLabel)}</div>
           ${r.memo ? `<div class="meta">备注：${escapeHtml(r.memo)}</div>` : ''}
+          <div class="modal-request-actions">
+            <button class="ghost" data-jump-request="${r.id}">查看申请 →</button>
+          </div>
         </div>`;
       }).join('')
     : '<div class="empty">暂无关联申请</div>';
@@ -718,6 +722,21 @@ function closeRequestModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+function jumpToRequest(requestId) {
+  state.highlightRequestId = requestId;
+  closeRequestModal();
+  setTab('requests');
+  setTimeout(() => {
+    const card = document.querySelector(`#requests .card[data-id="${requestId}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('highlight');
+      setTimeout(() => card.classList.remove('highlight'), 2500);
+    }
+    state.highlightRequestId = null;
+  }, 150);
+}
+
 document.addEventListener('click', async (event) => {
   const tab = event.target.closest('.tab');
   const action = event.target.closest('[data-action]');
@@ -726,6 +745,7 @@ document.addEventListener('click', async (event) => {
   const confirmBtn = event.target.closest('[data-stocktake-confirm]');
   const viewRequestsBtn = event.target.closest('[data-view-requests]');
   const closeModalBtn = event.target.closest('#close-modal');
+  const jumpRequestBtn = event.target.closest('[data-jump-request]');
   const modal = event.target.closest('#request-modal');
 
   if (tab) setTab(tab.dataset.tab);
@@ -742,6 +762,10 @@ document.addEventListener('click', async (event) => {
 
   if (viewRequestsBtn) {
     openRequestModal(viewRequestsBtn.dataset.viewRequests);
+  }
+
+  if (jumpRequestBtn) {
+    jumpToRequest(jumpRequestBtn.dataset.jumpRequest);
   }
 
   if (closeModalBtn || (modal && event.target === modal)) {
