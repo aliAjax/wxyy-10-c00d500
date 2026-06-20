@@ -654,7 +654,7 @@ function parseCsv(text) {
   return { headers, rows };
 }
 
-const BATCH_REQUIRED_FIELDS = ['name', 'category', 'batchNo', 'quantity', 'unit', 'expiresAt'];
+const BATCH_REQUIRED_FIELDS = ['name', 'category', 'batchNo', 'supplier', 'cabinet', 'quantity', 'unit', 'expiresAt'];
 const BATCH_FIELD_LABELS = {
   name: '药剂名称',
   category: '品类',

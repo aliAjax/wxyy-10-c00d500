@@ -908,8 +908,8 @@ function renderBatchImportView(view) {
   const hasPreview = preview && preview.totalRows > 0;
 
   const sampleCsv = `药剂名称,品类,批次号,供应商,存放柜位,安全等级,库存数量,单位,有效期,状态
-冷焰火粉A17,冷焰火,PY-A17-2606,星焰化工,防爆柜B-2,高,20,罐,2027-05-30,可用
-高空喷射礼花B03,喷射类,SP-B03-2606,星焰化工,防爆柜C-1,中,15,箱,2027-03-15,可用`;
+冷焰火粉A17,冷焰火,PY-A17-2606,华光烟火科技,防爆柜B-2,高,20,罐,2027-05-30,可用
+高空喷射礼花B03,礼花,LH-B03-2606,华光烟火科技,防爆柜C-1,中,15,发,2027-03-15,可用`;
 
   let summaryHtml = '';
   let tableHtml = '';
@@ -1006,7 +1006,7 @@ function renderBatchImportView(view) {
             <summary>查看示例 CSV 格式</summary>
             <pre class="sample-csv">${escapeHtml(sampleCsv)}</pre>
           </details>
-          <p class="meta">必填字段：药剂名称、品类、批次号、库存数量、单位、有效期</p>
+          <p class="meta">必填字段：药剂名称、品类、批次号、供应商、存放柜位、库存数量、单位、有效期</p>
           <p class="meta">供应商和柜位请填写名称/编号，系统会自动匹配</p>
         </div>
         <div class="import-actions">
