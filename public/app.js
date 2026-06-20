@@ -98,10 +98,58 @@ function computedFieldValue(field, item) {
   return '-';
 }
 
+function computeCabinetOccupancy(cabinetId) {
+  const cabinet = state.db.cabinets?.find((c) => c.id === cabinetId);
+  if (!cabinet) return null;
+  const capacity = Number(cabinet.capacity || 0);
+  const occupiedQuantity = (state.db.batches || [])
+    .filter((b) => b.cabinetId === cabinetId && b.status !== '已报废')
+    .reduce((sum, b) => sum + Number(b.quantity || 0), 0);
+  return {
+    cabinetId,
+    cabinetCode: cabinet.code,
+    cabinetArea: cabinet.area,
+    cabinetManager: cabinet.manager,
+    capacity,
+    occupiedQuantity,
+    remainingQuantity: capacity - occupiedQuantity,
+    occupancyRate: capacity > 0 ? Math.round((occupiedQuantity / capacity) * 100) : 0,
+    isOverLimit: occupiedQuantity > capacity,
+    isNearFull: capacity > 0 && occupiedQuantity / capacity >= 0.8
+  };
+}
+
+function getAllCabinetOccupancies() {
+  return (state.db.cabinets || []).map((c) => computeCabinetOccupancy(c.id));
+}
+
+function occupancyTone(occ) {
+  if (!occ) return '';
+  if (occ.isOverLimit) return 'bad';
+  if (occ.isNearFull) return 'warn';
+  return 'ok';
+}
+
+function cabinetOptionLabel(cabinet, occ) {
+  const base = [cabinet.code, cabinet.area].filter(Boolean).join(' / ');
+  if (!occ) return base;
+  return `${base}（已用${occ.occupiedQuantity}/${occ.capacity}，剩余${occ.remainingQuantity}）`;
+}
+
 function optionList(items, labelFields) {
   return items.map((item) => {
     const label = labelFields.map((field) => item[field]).filter(Boolean).join(' / ');
     return `<option value="${item.id}">${escapeHtml(label)}</option>`;
+  }).join('');
+}
+
+function cabinetOptionList(collection, labelFields) {
+  const items = state.db[collection] || [];
+  return items.map((item) => {
+    const occ = computeCabinetOccupancy(item.id);
+    const label = cabinetOptionLabel(item, occ);
+    const disabled = occ?.isOverLimit ? 'disabled' : '';
+    return `<option value="${item.id}" ${disabled} data-capacity='${JSON.stringify(occ || {})}'>${escapeHtml(label)}</option>`;
   }).join('');
 }
 
@@ -121,6 +169,17 @@ function formField(field) {
   if (field.type === 'relation') {
     const items = state.db[field.collection] || [];
     const autoFillAttr = field.autoFill ? `data-auto-fill='${JSON.stringify(field.autoFill)}' data-collection="${field.collection}"` : '';
+    if (field.collection === 'cabinets' && field.name === 'cabinetId') {
+      return `
+        <label class="${field.wide ? 'wide' : ''}">${field.label}
+          <select name="${field.name}" ${required} ${autoFillAttr} data-cabinet-select>
+            <option value="">请选择</option>
+            ${cabinetOptionList('cabinets', field.labelFields)}
+          </select>
+        </label>
+        <div class="cabinet-capacity-info" data-cabinet-capacity-info></div>
+      `;
+    }
     return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required} ${autoFillAttr}><option value="">请选择</option>${optionList(items, field.labelFields)}</select></label>`;
   }
   return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${required}></label>`;
@@ -514,15 +573,102 @@ function renderRiskAlertsView(view) {
   </section>`;
 }
 
+function renderCabinetCapacityCard(occ) {
+  const tone = occupancyTone(occ);
+  const rate = Math.min(occ.occupancyRate, 100);
+  const overAmount = occ.isOverLimit ? occ.occupiedQuantity - occ.capacity : 0;
+  const statusHtml = occ.isOverLimit
+    ? `<span class="pill bad">⚠️ 已超限 ${overAmount}</span>`
+    : occ.isNearFull
+    ? `<span class="pill warn">即将满载</span>`
+    : `<span class="pill ok">正常</span>`;
+
+  const batchesInCabinet = (state.db.batches || []).filter((b) => b.cabinetId === occ.cabinetId && b.status !== '已报废');
+  const batchCount = batchesInCabinet.length;
+  const batchPreview = batchesInCabinet.slice(0, 3).map((b) =>
+    `<div class="meta">• ${escapeHtml(b.name)} / ${escapeHtml(b.batchNo)}：${b.quantity}${escapeHtml(b.unit || '')}</div>`
+  ).join('');
+  const moreHint = batchCount > 3 ? `<div class="meta" style="color:var(--accent);">... 还有 ${batchCount - 3} 个批次</div>` : '';
+
+  return `
+    <article class="card capacity-card">
+      <div class="card-head">
+        <div>
+          <h3>${escapeHtml(occ.cabinetCode)}</h3>
+          <div class="meta">${escapeHtml(occ.cabinetArea)}　负责人：${escapeHtml(occ.cabinetManager || '-')}</div>
+        </div>
+        ${statusHtml}
+      </div>
+      <div class="capacity-progress-wrap">
+        <div class="capacity-progress-bar capacity-${tone}">
+          <div class="capacity-progress-fill" style="width:${Math.max(rate, 2)}%;"></div>
+        </div>
+        <div class="capacity-labels">
+          <span>已占用 <strong class="cap-used">${occ.occupiedQuantity}</strong></span>
+          <span>容量 <strong class="cap-total">${occ.capacity}</strong></span>
+          <span class="${occ.isOverLimit ? 'cap-bad' : (occ.isNearFull ? 'cap-warn' : 'cap-ok')}">
+            剩余 <strong class="cap-remain">${Math.max(occ.remainingQuantity, 0)}</strong>
+          </span>
+        </div>
+      </div>
+      <div class="detail" style="grid-template-columns: repeat(2, minmax(0, 1fr));margin-top:10px;">
+        <div>批次数量<br><strong>${batchCount} 个</strong></div>
+        <div>占用率<br><strong>${rate}%</strong></div>
+      </div>
+      ${batchCount > 0 ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
+          <div class="meta" style="font-weight:700;margin-bottom:6px;">存放批次：</div>
+          ${batchPreview}
+          ${moreHint}
+        </div>
+      ` : '<div class="empty" style="padding:10px;margin-top:8px;">暂无库存</div>'}
+    </article>
+  `;
+}
+
 function renderDashboardView(view) {
+  const occList = getAllCabinetOccupancies();
+  const overLimitCount = occList.filter((o) => o.isOverLimit).length;
+  const nearFullCount = occList.filter((o) => o.isNearFull && !o.isOverLimit).length;
+  const totalCapacity = occList.reduce((s, o) => s + o.capacity, 0);
+  const totalOccupied = occList.reduce((s, o) => s + o.occupiedQuantity, 0);
+  const totalRate = totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0;
+
+  const capacityStats = `
+    <div class="stats">
+      <div class="stat"><span>防爆柜总数</span><strong>${occList.length}</strong></div>
+      <div class="stat"><span>总容量 / 已占用</span><strong>${totalOccupied}<span style="font-size:16px;color:var(--muted);"> / ${totalCapacity}</span></strong></div>
+      <div class="stat"><span>整体占用率</span><strong>${totalRate}<span style="font-size:16px;color:var(--muted);">%</span></strong></div>
+      <div class="stat">
+        <span>容量预警</span>
+        <strong>
+          ${overLimitCount > 0 ? `<span style="color:var(--bad);">${overLimitCount}超限</span> ` : ''}
+          ${nearFullCount > 0 ? `<span style="color:var(--warn);">${nearFullCount}满载</span>` : (overLimitCount === 0 ? '<span style="color:var(--ok);">正常</span>' : '')}
+        </strong>
+      </div>
+    </div>
+  `;
+
   const source = view.focus;
   let items = [...(state.db[source.collection] || [])];
   if (source.field) items = items.filter((item) => source.values.includes(item[source.field]));
-  items = items.slice(0, source.limit || 8);
+  items = items.slice(0, source.limit || 5);
   const cardView = state.config.views.find((entry) => entry.collection === source.collection) || source;
+
   return `<section class="view active" id="${view.id}">
-    ${renderStats()}
-    <div class="panel"><h2>${escapeHtml(view.focusTitle)}</h2><div class="list">${items.length ? items.map((item) => renderCard(item, source.collection, cardView)).join('') : '<div class="empty">暂无重点事项</div>'}</div></div>
+    ${capacityStats}
+    <div class="panel">
+      <h2>📦 柜位容量占用情况</h2>
+      <div class="capacity-grid">
+        ${occList.length ? occList.map(renderCabinetCapacityCard).join('') : '<div class="empty">暂无柜位数据</div>'}
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px;">
+      <h2>${escapeHtml(view.focusTitle)}</h2>
+      <div class="list">
+        ${items.length ? items.map((item) => renderCard(item, source.collection, cardView)).join('') : '<div class="empty">暂无重点事项</div>'}
+      </div>
+    </div>
   </section>`;
 }
 
@@ -1474,6 +1620,74 @@ function collectScheduleReturnData(scheduleId) {
   return { items };
 }
 
+function renderCabinetCapacityInfo(form) {
+  if (!form) return;
+  const cabinetSelect = form.querySelector('select[data-cabinet-select]');
+  const capacityInfo = form.querySelector('[data-cabinet-capacity-info]');
+  const qtyInput = form.querySelector('input[name="quantity"]');
+
+  if (!cabinetSelect || !capacityInfo) return;
+
+  const cabinetId = cabinetSelect.value;
+  const qty = Number(qtyInput?.value || 0);
+
+  if (!cabinetId) {
+    capacityInfo.innerHTML = '';
+    return;
+  }
+
+  const occ = computeCabinetOccupancy(cabinetId);
+  if (!occ) {
+    capacityInfo.innerHTML = '';
+    return;
+  }
+
+  let newOccupied = occ.occupiedQuantity + qty;
+  let newRemaining = occ.capacity - newOccupied;
+  let willOver = newOccupied > occ.capacity;
+  let willNearFull = occ.capacity > 0 && newOccupied / occ.capacity >= 0.8;
+  let overAmount = newOccupied - occ.capacity;
+
+  const tone = willOver ? 'bad' : willNearFull ? 'warn' : 'ok';
+  const rate = Math.min(Math.round((newOccupied / occ.capacity) * 100), 100);
+
+  const overTipHtml = willOver
+    ? `<div class="capacity-over-tip">⚠️ 容量不足！本次新增${qty}后将超出 ${overAmount}，请减少数量或选择其他柜位</div>`
+    : willNearFull
+    ? `<div class="capacity-near-tip">⚡ 本次新增后柜位即将满载（占用率${rate}%），请合理分配库存</div>`
+    : '';
+
+  const afterLabelHtml = qty > 0
+    ? `
+      <div class="capacity-after-label">
+        <span class="pill" style="background:rgba(17,97,92,.1);color:var(--accent);font-size:11px;">本次新增 +${qty}</span>
+      </div>
+    `
+    : '';
+
+  capacityInfo.innerHTML = `
+    <div class="cabinet-capacity-panel">
+      <div class="capacity-header">
+        <span class="capacity-title">柜位容量：${occ.cabinetCode}</span>
+        ${afterLabelHtml}
+      </div>
+      <div class="capacity-progress-wrap capacity-inline">
+        <div class="capacity-progress-bar capacity-${tone}">
+          <div class="capacity-progress-fill" style="width:${Math.max(rate, 2)}%;"></div>
+        </div>
+        <div class="capacity-labels capacity-labels-sm">
+          <span>已占用 <strong>${occ.occupiedQuantity}</strong></span>
+          <span>新增后 <strong class="${willOver ? 'cap-bad' : ''}">${newOccupied}</strong> / ${occ.capacity}</span>
+          <span class="${willOver ? 'cap-bad' : (willNearFull ? 'cap-warn' : 'cap-ok')}">
+            剩余 <strong>${Math.max(newRemaining, 0)}</strong>
+          </span>
+        </div>
+      </div>
+      ${overTipHtml}
+    </div>
+  `;
+}
+
 function applyAutoFill(select) {
   const form = select.closest('form');
   if (!form) return;
@@ -1491,6 +1705,7 @@ function applyAutoFill(select) {
 
 function initializeAutoFillFields() {
   $$('select[data-auto-fill]').forEach(applyAutoFill);
+  $$('form').forEach(renderCabinetCapacityInfo);
 }
 
 function render() {
@@ -2122,6 +2337,13 @@ document.addEventListener('input', (e) => {
     state.scheduleReturnInputs[sId][bId][field] = schedReturnInput.value;
     return;
   }
+
+  const qtyInput = e.target.closest('input[name="quantity"]');
+  if (qtyInput) {
+    const form = e.target.closest('form');
+    if (form) renderCabinetCapacityInfo(form);
+    return;
+  }
 });
 
 document.addEventListener('change', (e) => {
@@ -2151,6 +2373,12 @@ document.addEventListener('change', (e) => {
     return;
   }
 
+  const cabinetSelect = e.target.closest('select[data-cabinet-select]');
+  if (cabinetSelect) {
+    const form = e.target.closest('form');
+    if (form) renderCabinetCapacityInfo(form);
+  }
+
   const autoFill = e.target.closest('[data-auto-fill]');
   if (autoFill) {
     const viewCfg = state.config.views.find(v => v.id === state.activeView);
@@ -2170,6 +2398,7 @@ document.addEventListener('change', (e) => {
         }
       }
     }
+    if (form) renderCabinetCapacityInfo(form);
     return;
   }
 });
@@ -2212,22 +2441,56 @@ document.addEventListener('submit', async (e) => {
     const collection = crudForm.dataset.crudForm;
     const editId = crudForm.dataset.editId;
     const data = collectFormData(crudForm);
-    if (editId) {
-      await api(`/api/${collection}/${editId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    } else {
-      await api(`/api/${collection}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+
+    if (collection === 'batches' && data.cabinetId) {
+      const occ = computeCabinetOccupancy(data.cabinetId);
+      const qty = Number(data.quantity || 0);
+      if (occ && qty > 0) {
+        const newOccupied = occ.occupiedQuantity + qty;
+        if (!editId && newOccupied > occ.capacity) {
+          toast(`柜位容量不足！容量${occ.capacity}，已占用${occ.occupiedQuantity}，本次${qty}，超出${newOccupied - occ.capacity}`);
+          return;
+        }
+        if (editId) {
+          const before = state.db.batches?.find(b => b.id === editId);
+          const beforeCabinet = before?.cabinetId;
+          const beforeQty = Number(before?.quantity || 0);
+          if (data.cabinetId !== beforeCabinet) {
+            if (newOccupied > occ.capacity) {
+              toast(`柜位容量不足！容量${occ.capacity}，已占用${occ.occupiedQuantity}，本次${qty}，超出${newOccupied - occ.capacity}`);
+              return;
+            }
+          } else if (qty > beforeQty) {
+            const diff = qty - beforeQty;
+            if (occ.occupiedQuantity - beforeQty + qty > occ.capacity) {
+              toast(`柜位容量不足！容量${occ.capacity}，调整后超出${(occ.occupiedQuantity - beforeQty + qty) - occ.capacity}`);
+              return;
+            }
+          }
+        }
+      }
     }
-    state.activeModal = null;
-    await loadDb();
-    render();
+
+    try {
+      if (editId) {
+        await api(`/api/${collection}/${editId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+      } else {
+        await api(`/api/${collection}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+      }
+      state.activeModal = null;
+      await loadDb();
+      render();
+    } catch (err) {
+      toast(err.message || '保存失败');
+    }
     return;
   }
 

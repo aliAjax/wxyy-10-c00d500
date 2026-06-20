@@ -180,6 +180,22 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
       history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`, operator)]
     };
+  } else if (collection === 'batches') {
+    const defaultNote = req.body.note || req.body.memo || '';
+    const cabinetId = req.body.cabinetId;
+    const addQty = Number(req.body.quantity || 0);
+    if (cabinetId) {
+      const capCheck = checkCabinetCapacity(db, cabinetId, addQty);
+      if (!capCheck.ok) return res.status(409).json({ error: capCheck.error, capacityInfo: capCheck.occupancy });
+    }
+    item = {
+      id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      ...req.body,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+      history: [stamp('创建', defaultNote, operator)]
+    };
   } else {
     const defaultNote = req.body.note || req.body.memo || '';
     item = {
@@ -240,6 +256,23 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
   const beforeItem = { ...item };
   const historyAction = req.body.historyAction;
   delete req.body.historyAction;
+
+  if (collection === 'batches') {
+    const newCabinetId = req.body.cabinetId !== undefined ? req.body.cabinetId : item.cabinetId;
+    const oldCabinetId = item.cabinetId;
+    const newQty = req.body.quantity !== undefined ? Number(req.body.quantity || 0) : Number(item.quantity || 0);
+    const oldQty = Number(item.quantity || 0);
+
+    if (newCabinetId && newCabinetId !== oldCabinetId) {
+      const capCheck = checkCabinetCapacity(db, newCabinetId, newQty, item.id);
+      if (!capCheck.ok) return res.status(409).json({ error: capCheck.error, capacityInfo: capCheck.occupancy });
+    } else if (newCabinetId && newCabinetId === oldCabinetId && newQty > oldQty) {
+      const diffQty = newQty - oldQty;
+      const capCheck = checkCabinetCapacity(db, newCabinetId, diffQty, item.id);
+      if (!capCheck.ok) return res.status(409).json({ error: capCheck.error, capacityInfo: capCheck.occupancy });
+    }
+  }
+
   Object.assign(item, req.body, { updatedAt: new Date().toISOString() });
   item.history = item.history || [];
   if (historyAction || req.body.note || req.body.memo || req.body.status) {
@@ -866,6 +899,15 @@ function validateBatchRow(row, headers, db, rowIndex) {
     status: data.status || '可用'
   };
 
+  let capacityError = null;
+  if (batchData.cabinetId && batchData.quantity > 0 && errors.length === 0) {
+    const capCheck = checkCabinetCapacity(db, batchData.cabinetId, batchData.quantity);
+    if (!capCheck.ok) {
+      capacityError = capCheck.error;
+      errors.push(capacityError);
+    }
+  }
+
   return {
     rowIndex,
     data: batchData,
@@ -975,6 +1017,16 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
         continue;
       }
 
+      const cabinetId = rowData.cabinetId;
+      const addQty = Number(rowData.quantity || 0);
+      if (cabinetId) {
+        const capCheck = checkCabinetCapacity(db, cabinetId, addQty);
+        if (!capCheck.ok) {
+          failed.push({ batchNo, error: capCheck.error });
+          continue;
+        }
+      }
+
       const item = {
         id: `batches-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
         name: rowData.name,
@@ -1016,6 +1068,53 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: '导入失败：' + err.message });
   }
+});
+
+function computeCabinetOccupancy(db, cabinetId, excludeBatchId = null) {
+  const cabinet = db.cabinets?.find((c) => c.id === cabinetId);
+  if (!cabinet) return null;
+  const capacity = Number(cabinet.capacity || 0);
+  const occupiedQuantity = (db.batches || [])
+    .filter((b) => b.cabinetId === cabinetId && b.id !== excludeBatchId && b.status !== '已报废')
+    .reduce((sum, b) => sum + Number(b.quantity || 0), 0);
+  return {
+    cabinetId,
+    cabinetCode: cabinet.code,
+    cabinetArea: cabinet.area,
+    capacity,
+    occupiedQuantity,
+    remainingQuantity: capacity - occupiedQuantity,
+    occupancyRate: capacity > 0 ? Math.round((occupiedQuantity / capacity) * 100) : 0
+  };
+}
+
+function checkCabinetCapacity(db, cabinetId, addQuantity, excludeBatchId = null) {
+  const occ = computeCabinetOccupancy(db, cabinetId, excludeBatchId);
+  if (!occ) return { ok: true };
+  const qty = Number(addQuantity || 0);
+  if (qty <= 0) return { ok: true, occupancy: occ };
+  const newOccupied = occ.occupiedQuantity + qty;
+  if (newOccupied > occ.capacity) {
+    return {
+      ok: false,
+      error: `柜位「${occ.cabinetCode}（${occ.cabinetArea}）」容量不足：容量${occ.capacity}，已占用${occ.occupiedQuantity}，本次新增${qty}，合计将占用${newOccupied}，超出${newOccupied - occ.capacity}`,
+      occupancy: { ...occ, occupiedQuantity: newOccupied, remainingQuantity: occ.capacity - newOccupied, occupancyRate: occ.capacity > 0 ? Math.round((newOccupied / occ.capacity) * 100) : 0 }
+    };
+  }
+  return { ok: true, occupancy: { ...occ, occupiedQuantity: newOccupied, remainingQuantity: occ.capacity - newOccupied, occupancyRate: occ.capacity > 0 ? Math.round((newOccupied / occ.capacity) * 100) : 0 } };
+}
+
+app.get('/api/cabinets/occupancy', async (req, res) => {
+  const db = await readDb();
+  const result = (db.cabinets || []).map((c) => computeCabinetOccupancy(db, c.id));
+  res.json(result);
+});
+
+app.get('/api/cabinets/:id/occupancy', async (req, res) => {
+  const db = await readDb();
+  const occ = computeCabinetOccupancy(db, req.params.id);
+  if (!occ) return res.status(404).json({ error: '柜位不存在' });
+  res.json(occ);
 });
 
 const LEVEL_RANK = { '低': 1, '中': 2, '高': 3 };
