@@ -243,6 +243,90 @@ app.post('/api/stocktakes/:id/confirm', async (req, res) => {
   res.json(stocktake);
 });
 
+app.post('/api/wastes/:id/approve', async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const waste = db.wastes?.find((entry) => entry.id === id);
+  if (!waste) return res.status(404).json({ error: '报废单不存在' });
+  if (waste.status !== '待审批') return res.status(409).json({ error: '只有待审批状态的报废单可以审批' });
+
+  const batch = db.batches.find((b) => b.id === waste.batchId);
+  if (!batch) return res.status(409).json({ error: '关联批次不存在' });
+  if (batch.status === '已报废') return res.status(409).json({ error: '批次已报废，无法审批' });
+
+  const wasteQty = Number(waste.quantity || 0);
+  const stockQty = Number(batch.quantity || 0);
+  if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
+  if (wasteQty > stockQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过当前库存(${stockQty})` });
+
+  const now = new Date().toISOString();
+  const approver = req.body.approver || '系统';
+
+  waste.status = '待处置';
+  waste.approver = approver;
+  waste.approvedAt = now;
+  waste.updatedAt = now;
+  waste.history = waste.history || [];
+  waste.history.unshift(stamp('审批通过', `审批人：${approver}，报废数量：${wasteQty}${batch.unit || ''}`));
+
+  batch.updatedAt = now;
+  batch.history = batch.history || [];
+  batch.history.unshift(stamp('报废审批通过', `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`));
+
+  await writeDb(db);
+  res.json(waste);
+});
+
+app.post('/api/wastes/:id/dispose', async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const waste = db.wastes?.find((entry) => entry.id === id);
+  if (!waste) return res.status(404).json({ error: '报废单不存在' });
+  if (waste.status !== '待处置') return res.status(409).json({ error: '只有待处置状态的报废单可以确认处置' });
+
+  const batch = db.batches.find((b) => b.id === waste.batchId);
+  if (!batch) return res.status(409).json({ error: '关联批次不存在' });
+  if (batch.status === '已报废') return res.status(409).json({ error: '批次已报废' });
+
+  const actualQty = Number(req.body.actualQuantity ?? waste.quantity);
+  const disposalMethod = req.body.disposalMethod || waste.disposalMethod || '';
+  const witness = req.body.witness || waste.witness || '';
+  const operator = req.body.operator || '系统';
+
+  const wasteQty = Number(waste.quantity || 0);
+  const stockQty = Number(batch.quantity || 0);
+  if (actualQty <= 0) return res.status(409).json({ error: '实际处置数量必须大于0' });
+  if (actualQty > wasteQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过申请数量(${wasteQty})` });
+  if (actualQty > stockQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过当前库存(${stockQty})` });
+
+  const now = new Date().toISOString();
+
+  waste.actualQuantity = actualQty;
+  waste.disposalMethod = disposalMethod;
+  waste.witness = witness;
+  waste.status = '已处置';
+  waste.disposedAt = now;
+  waste.disposedBy = operator;
+  waste.updatedAt = now;
+  waste.history = waste.history || [];
+  waste.history.unshift(stamp('确认处置', `实际处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}`));
+
+  const newQty = stockQty - actualQty;
+  batch.quantity = newQty;
+  batch.updatedAt = now;
+  batch.history = batch.history || [];
+
+  const noteParts = [`报废单：${waste.code || waste.id}`, `报废数量：-${actualQty}${batch.unit || ''}`, `剩余库存：${newQty}${batch.unit || ''}`];
+  if (newQty <= 0) {
+    batch.status = '已报废';
+    noteParts.push('库存清零，批次状态更新为已报废');
+  }
+  batch.history.unshift(stamp('报废扣减', noteParts.join('，')));
+
+  await writeDb(db);
+  res.json(waste);
+});
+
 app.patch('/api/stocktakes/:id/items', async (req, res) => {
   const db = await readDb();
   const { id } = req.params;

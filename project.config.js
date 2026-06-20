@@ -25,7 +25,9 @@ module.exports = {
     '筹备中': 'warn',
     '进行中': 'ok',
     '已完成': 'ok',
-    '已取消': 'bad'
+    '已取消': 'bad',
+    '已处置': 'ok',
+    '待处置': 'warn'
   },
   collections: {
     batches: { label: '药剂批次' },
@@ -33,7 +35,8 @@ module.exports = {
     suppliers: { label: '供应商档案' },
     cabinets: { label: '柜位台账' },
     projects: { label: '演出项目' },
-    stocktakes: { label: '库存盘点' }
+    stocktakes: { label: '库存盘点' },
+    wastes: { label: '报废处置' }
   },
   alerts: {
     expiringDays: 30,
@@ -52,7 +55,11 @@ module.exports = {
     { label: '演出项目', collection: 'projects' },
     { label: '筹备中', collection: 'projects', filter: { field: 'status', value: '筹备中' } },
     { label: '盘点单', collection: 'stocktakes' },
-    { label: '录入中盘点', collection: 'stocktakes', filter: { field: 'status', value: '录入中' } }
+    { label: '录入中盘点', collection: 'stocktakes', filter: { field: 'status', value: '录入中' } },
+    { label: '报废单', collection: 'wastes' },
+    { label: '待审批报废', collection: 'wastes', filter: { field: 'status', value: '待审批' } },
+    { label: '待处置报废', collection: 'wastes', filter: { field: 'status', value: '待处置' } },
+    { label: '已处置报废', collection: 'wastes', filter: { field: 'status', value: '已处置' } }
   ],
   views: [
     {
@@ -252,6 +259,44 @@ module.exports = {
         { label: '操作员', name: 'operator', required: true },
         { label: '盘点范围/备注', name: 'note', type: 'textarea', wide: true }
       ]
+    },
+    {
+      id: 'wastes',
+      label: '报废处置',
+      type: 'waste',
+      collection: 'wastes',
+      formTitle: '创建报废单',
+      listTitle: '报废单列表',
+      submitLabel: '提交报废申请',
+      searchPlaceholder: '搜索报废单号、标题、申请人',
+      searchFields: ['code', 'title', 'applicant', 'reason', 'note'],
+      statusField: 'status',
+      statusOptions: ['待审批', '已驳回', '待处置', '已处置'],
+      titleFields: ['code', 'title'],
+      summaryFields: ['applicant', 'reason'],
+      defaults: { status: '待审批', actualQuantity: 0 },
+      relation: { collection: 'batches', localKey: 'batchId', labelFields: ['name', 'batchNo'] },
+      detailFields: [
+        { label: '申请数量', name: 'quantity' },
+        { label: '实际处置', name: 'actualQuantity' },
+        { label: '处置方式', name: 'disposalMethod' },
+        { label: '见证人', name: 'witness' },
+        { label: '申请人', name: 'applicant' },
+        { label: '审批人', name: 'approver' }
+      ],
+      fields: [
+        { label: '报废单号', name: 'code', required: true },
+        { label: '报废标题', name: 'title', required: true, wide: true },
+        { label: '药剂批次', name: 'batchId', type: 'relation', collection: 'batches', labelFields: ['name', 'batchNo'], required: true, wide: true, autoFill: [{ from: 'quantity', to: 'maxQuantity' }, { from: 'unit', to: 'unit' }] },
+        { label: '当前库存', name: 'maxQuantity', type: 'display' },
+        { label: '单位', name: 'unit', type: 'display' },
+        { label: '申请报废数量', name: 'quantity', type: 'number', required: true },
+        { label: '报废原因', name: 'reason', required: true, wide: true },
+        { label: '申请人', name: 'applicant', required: true },
+        { label: '处置方式', name: 'disposalMethod', type: 'select', options: ['专业机构回收', '化学中和销毁', '深埋处理', '其他'] },
+        { label: '见证人', name: 'witness' },
+        { label: '备注', name: 'note', type: 'textarea', wide: true }
+      ]
     }
   ],
   actions: [
@@ -284,6 +329,7 @@ module.exports = {
     { id: 'project-prepare', label: '筹备中', collection: 'projects', patches: [{ field: 'status', value: '筹备中' }] },
     { id: 'project-ongoing', label: '进行中', collection: 'projects', patches: [{ field: 'status', value: '进行中' }] },
     { id: 'project-complete', label: '已完成', collection: 'projects', patches: [{ field: 'status', value: '已完成' }] },
-    { id: 'project-cancel', label: '取消', collection: 'projects', danger: true, patches: [{ field: 'status', value: '已取消' }] }
+    { id: 'project-cancel', label: '取消', collection: 'projects', danger: true, patches: [{ field: 'status', value: '已取消' }] },
+    { id: 'waste-reject', label: '驳回', collection: 'wastes', danger: true, patches: [{ field: 'status', value: '已驳回' }] }
   ]
 };

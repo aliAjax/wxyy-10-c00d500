@@ -197,14 +197,24 @@
       "batchNo": "LH-J15-2606",
       "cabinetId": "cabinet-seed-1",
       "safetyLevel": "中",
-      "quantity": 5,
+      "quantity": 0,
       "unit": "发",
       "expiresAt": "2026-07-10",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "已报废",
       "createdAt": "2026-06-10T10:00:00.000Z",
-      "updatedAt": "2026-06-10T10:00:00.000Z",
+      "updatedAt": "2026-06-20T09:11:26.442Z",
       "history": [
+        {
+          "at": "2026-06-20T09:11:26.442Z",
+          "action": "报废扣减",
+          "note": "报废单：BF-2026-003，报废数量：-5发，剩余库存：0发，库存清零，批次状态更新为已报废"
+        },
+        {
+          "at": "2026-06-20T09:11:26.417Z",
+          "action": "报废审批通过",
+          "note": "报废单：BF-2026-003，申请报废：5发"
+        },
         {
           "at": "2026-06-10T10:00:00.000Z",
           "action": "创建",
@@ -219,14 +229,24 @@
       "batchNo": "PY-P20-2508",
       "cabinetId": "cabinet-seed-3",
       "safetyLevel": "高",
-      "quantity": 15,
+      "quantity": 10,
       "unit": "支",
       "expiresAt": "2026-05-20",
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2025-08-15T09:00:00.000Z",
-      "updatedAt": "2026-05-20T09:00:00.000Z",
+      "updatedAt": "2026-06-20T09:09:42.087Z",
       "history": [
+        {
+          "at": "2026-06-20T09:09:42.087Z",
+          "action": "报废扣减",
+          "note": "报废单：BF-2026-001，报废数量：-5支，剩余库存：10支"
+        },
+        {
+          "at": "2026-06-20T09:09:21.532Z",
+          "action": "报废审批通过",
+          "note": "报废单：BF-2026-001，申请报废：5支"
+        },
         {
           "at": "2026-05-20T09:00:00.000Z",
           "action": "更新",
@@ -535,6 +555,100 @@
       },
       "confirmedAt": "2026-06-20T07:35:10.519Z",
       "confirmedBy": "李明"
+    }
+  ],
+  "wastes": [
+    {
+      "id": "wastes-1781946541870-22b51",
+      "code": "BF-2026-001",
+      "title": "过期药剂集中报废",
+      "batchId": "batch-alert-2",
+      "quantity": 5,
+      "reason": "已过期，存在安全隐患",
+      "applicant": "张伟",
+      "disposalMethod": "专业机构回收",
+      "witness": "李明",
+      "note": "6月例行报废处理",
+      "status": "已处置",
+      "createdAt": "2026-06-20T09:09:01.870Z",
+      "updatedAt": "2026-06-20T09:09:42.087Z",
+      "history": [
+        {
+          "at": "2026-06-20T09:09:42.087Z",
+          "action": "确认处置",
+          "note": "实际处置：5支，处置方式：专业机构回收，见证人：李明"
+        },
+        {
+          "at": "2026-06-20T09:09:21.532Z",
+          "action": "审批通过",
+          "note": "审批人：王主任，报废数量：5支"
+        },
+        {
+          "at": "2026-06-20T09:09:01.870Z",
+          "action": "创建",
+          "note": "6月例行报废处理"
+        }
+      ],
+      "approver": "王主任",
+      "approvedAt": "2026-06-20T09:09:21.532Z",
+      "actualQuantity": 5,
+      "disposedAt": "2026-06-20T09:09:42.087Z",
+      "disposedBy": "张伟"
+    },
+    {
+      "id": "wastes-1781946627168-24f4a",
+      "code": "BF-2026-002",
+      "title": "测试超量报废",
+      "batchId": "batch-alert-1",
+      "quantity": 100,
+      "reason": "测试超量",
+      "applicant": "测试员",
+      "status": "待审批",
+      "createdAt": "2026-06-20T09:10:27.168Z",
+      "updatedAt": "2026-06-20T09:10:27.168Z",
+      "history": [
+        {
+          "at": "2026-06-20T09:10:27.168Z",
+          "action": "创建",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "id": "wastes-1781946662377-a3025",
+      "code": "BF-2026-003",
+      "title": "全部报废测试",
+      "batchId": "batch-alert-1",
+      "quantity": 5,
+      "reason": "全部过期，需全部报废",
+      "applicant": "测试员",
+      "status": "已处置",
+      "createdAt": "2026-06-20T09:11:02.377Z",
+      "updatedAt": "2026-06-20T09:11:26.442Z",
+      "history": [
+        {
+          "at": "2026-06-20T09:11:26.442Z",
+          "action": "确认处置",
+          "note": "实际处置：5发，处置方式：未指定，见证人：未记录"
+        },
+        {
+          "at": "2026-06-20T09:11:26.417Z",
+          "action": "审批通过",
+          "note": "审批人：测试，报废数量：5发"
+        },
+        {
+          "at": "2026-06-20T09:11:02.377Z",
+          "action": "创建",
+          "note": ""
+        }
+      ],
+      "approver": "测试",
+      "approvedAt": "2026-06-20T09:11:26.417Z",
+      "actualQuantity": 5,
+      "disposalMethod": "",
+      "witness": "",
+      "disposedAt": "2026-06-20T09:11:26.442Z",
+      "disposedBy": "测试"
     }
   ]
 }

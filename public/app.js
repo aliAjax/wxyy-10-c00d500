@@ -4,7 +4,10 @@ const state = {
   activeTab: '',
   expandedStocktake: null,
   stocktakeEdits: {},
-  highlightRequestId: null
+  expandedWaste: null,
+  wasteEdits: {},
+  highlightRequestId: null,
+  preselectedBatchId: null
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -166,12 +169,18 @@ function renderCard(item, collection, view) {
     .filter((action) => action.collection === collection)
     .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${item.id}">${escapeHtml(action.label)}</button>`)
     .join('');
+  const extraActions = collection === 'batches' && item.status !== '已报废'
+    ? `<button class="ghost" data-create-waste-from-batch="${item.id}">发起报废</button>`
+    : '';
+  const allActions = actions || extraActions
+    ? `<div class="actions">${actions}${extraActions}</div>`
+    : '';
   return `<article class="card" data-collection="${collection}" data-id="${item.id}">
     <div class="card-head"><h3>${escapeHtml(title)}</h3>${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}</div>
     ${relation}
     ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
     ${details ? `<div class="detail">${details}</div>` : ''}
-    ${actions ? `<div class="actions">${actions}</div>` : ''}
+    ${allActions}
     ${historyHtml(item)}
   </article>`;
 }
@@ -282,6 +291,10 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
     ? `<button class="ghost" data-view-requests="${batch.id}">查看关联申请</button>`
     : '';
 
+  const wasteFromBatchBtn = batch.status !== '已报废'
+    ? `<button class="ghost" data-create-waste-from-batch="${batch.id}">发起报废</button>`
+    : '';
+
   return `<article class="card alert-card alert-${alertType}">
     <div class="card-head">
       <div>
@@ -294,7 +307,7 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
       </div>
     </div>
     ${details ? `<div class="detail">${details}</div>` : ''}
-    ${actions || viewRequestsBtn ? `<div class="actions">${actions}${viewRequestsBtn}</div>` : ''}
+    ${actions || viewRequestsBtn || wasteFromBatchBtn ? `<div class="actions">${actions}${viewRequestsBtn}${wasteFromBatchBtn}</div>` : ''}
   </article>`;
 }
 
@@ -626,6 +639,159 @@ function renderStocktakeView(view) {
   </section>`;
 }
 
+function renderWasteCard(waste, view) {
+  const isExpanded = state.expandedWaste === waste.id;
+  const title = view.titleFields.map((f) => waste[f]).filter(Boolean).join(' / ') || waste.id;
+  const summary = (view.summaryFields || []).map((f) => waste[f]).filter(Boolean).join(' · ');
+  const batch = state.db.batches?.find((b) => b.id === waste.batchId);
+  const batchLabel = batch ? `${batch.name} / ${batch.batchNo}` : '未关联批次';
+  const unit = batch?.unit || '';
+
+  let expandContent = '';
+  if (isExpanded) {
+    const detailRows = (view.detailFields || []).map((field) => {
+      let value;
+      if (field.type === 'relation') {
+        value = relationLabel(field, waste[field.name]);
+      } else {
+        value = waste[field.name];
+      }
+      const displayValue = value === null || value === undefined || value === '' ? '-' : value;
+      return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
+    }).join('');
+
+    let actionButtons = '';
+    if (waste.status === '待审批') {
+      actionButtons = `
+        <div class="waste-actions">
+          <button class="secondary" data-waste-approve="${waste.id}">审批通过</button>
+          <button class="danger" data-action="waste-reject" data-id="${waste.id}">驳回</button>
+        </div>
+      `;
+    } else if (waste.status === '待处置') {
+      const actualQty = state.wasteEdits[waste.id]?.actualQuantity ?? waste.quantity;
+      const disposalMethod = state.wasteEdits[waste.id]?.disposalMethod || waste.disposalMethod || '';
+      const witness = state.wasteEdits[waste.id]?.witness || waste.witness || '';
+      const operator = state.wasteEdits[waste.id]?.operator || '';
+      actionButtons = `
+        <div class="waste-dispose-form">
+          <h4>确认处置</h4>
+          <div class="form-grid">
+            <label>实际处置数量<input type="number" class="waste-input" data-waste="${waste.id}" data-field="actualQuantity" value="${actualQty}" min="0" max="${waste.quantity}"><span class="unit">${escapeHtml(unit)}</span></label>
+            <label>处置方式
+              <select class="waste-input" data-waste="${waste.id}" data-field="disposalMethod">
+                <option value="">请选择</option>
+                <option value="专业机构回收" ${disposalMethod === '专业机构回收' ? 'selected' : ''}>专业机构回收</option>
+                <option value="化学中和销毁" ${disposalMethod === '化学中和销毁' ? 'selected' : ''}>化学中和销毁</option>
+                <option value="深埋处理" ${disposalMethod === '深埋处理' ? 'selected' : ''}>深埋处理</option>
+                <option value="其他" ${disposalMethod === '其他' ? 'selected' : ''}>其他</option>
+              </select>
+            </label>
+            <label>见证人<input type="text" class="waste-input" data-waste="${waste.id}" data-field="witness" value="${escapeHtml(witness)}"></label>
+            <label>操作人<input type="text" class="waste-input" data-waste="${waste.id}" data-field="operator" value="${escapeHtml(operator)}"></label>
+          </div>
+          <div class="waste-actions">
+            <button class="danger" data-waste-dispose="${waste.id}">确认处置并扣减库存</button>
+          </div>
+        </div>
+      `;
+    } else if (waste.status === '已处置') {
+      actionButtons = `
+        <div class="waste-disposed-info">
+          <h4>处置详情</h4>
+          <div class="form-grid">
+            <div class="meta">实际处置数量<br><strong>${waste.actualQuantity || waste.quantity || 0} ${escapeHtml(unit)}</strong></div>
+            <div class="meta">处置方式<br><strong>${escapeHtml(waste.disposalMethod || '-')}</strong></div>
+            <div class="meta">见证人<br><strong>${escapeHtml(waste.witness || '-')}</strong></div>
+            <div class="meta">处置人<br><strong>${escapeHtml(waste.disposedBy || '-')}</strong></div>
+          </div>
+          <div class="meta" style="margin-top:8px;">处置时间：${fmtDate(waste.disposedAt)}</div>
+        </div>
+      `;
+    }
+
+    expandContent = `
+      <div class="waste-detail">
+        <div class="meta">关联批次：${escapeHtml(batchLabel)}</div>
+        ${batch ? `<div class="meta">批次当前库存：${batch.quantity} ${escapeHtml(batch.unit || '')}　${pill(batch.status, toneFor(batch.status))}</div>` : ''}
+        ${waste.reason ? `<div class="meta">报废原因：${escapeHtml(waste.reason)}</div>` : ''}
+        ${waste.note ? `<div class="meta">备注：${escapeHtml(waste.note)}</div>` : ''}
+        ${waste.approver ? `<div class="meta">审批人：${escapeHtml(waste.approver)}　审批时间：${fmtDate(waste.approvedAt)}</div>` : ''}
+        <div class="detail">${detailRows}</div>
+        ${actionButtons}
+      </div>
+    `;
+  }
+
+  return `<article class="card waste-card">
+    <div class="card-head" data-expand-waste="${waste.id}" style="cursor:pointer;">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <div class="meta">批次：${escapeHtml(batchLabel)}　${summary ? escapeHtml(summary) : ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${pill(waste.status, toneFor(waste.status))}
+        <span class="meta">申请数量：${waste.quantity || 0} ${escapeHtml(unit)}</span>
+        <span class="meta">${isExpanded ? '▲ 收起' : '▼ 展开详情'}</span>
+      </div>
+    </div>
+    ${expandContent}
+    ${historyHtml(waste)}
+  </article>`;
+}
+
+function renderWasteList(view) {
+  const query = $(`#search-${view.id}`)?.value.trim() || '';
+  const status = $(`#status-${view.id}`)?.value || '';
+  let items = [...(state.db[view.collection] || [])];
+  if (query) {
+    items = items.filter((item) => view.searchFields.some((field) => {
+      const raw = String(item[field] || '');
+      if (raw.includes(query)) return true;
+      if (field === 'batchId') {
+        const batch = state.db.batches?.find((b) => b.id === item[field]);
+        if (batch && (batch.name.includes(query) || batch.batchNo.includes(query))) return true;
+      }
+      return false;
+    }));
+  }
+  if (status) {
+    items = items.filter((item) => item[view.statusField] === status);
+  }
+  return items.length ? items.map((item) => renderWasteCard(item, view)).join('') : `<div class="empty">暂无报废单</div>`;
+}
+
+function renderWasteView(view) {
+  const statusOptions = view.statusOptions || [];
+  return `<section class="view" id="${view.id}">
+    <div class="grid">
+      <form class="panel" data-create="${view.collection}" data-view="${view.id}" data-waste-create>
+        <h2>${escapeHtml(view.formTitle)}</h2>
+        <div class="form-grid">${view.fields.map(formField).join('')}</div>
+        <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
+      </form>
+      <div class="panel">
+        <h2>${escapeHtml(view.listTitle)}</h2>
+        <div class="toolbar">
+          <input id="search-${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}">
+          <select id="status-${view.id}">
+            <option value="">全部状态</option>
+            ${statusOptions.map((option) => `<option>${escapeHtml(option)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="list" id="list-${view.id}">${renderWasteList(view)}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function refreshWasteList(viewId) {
+  const view = state.config.views.find((v) => v.id === viewId);
+  if (!view) return;
+  const listEl = $(`#list-${viewId}`);
+  if (listEl) listEl.innerHTML = renderWasteList(view);
+}
+
 function applyAutoFill(select) {
   const form = select.closest('form');
   if (!form) return;
@@ -653,6 +819,7 @@ function render() {
     if (view.type === 'risk-alerts') return renderRiskAlertsView(view);
     if (view.type === 'dashboard') return renderDashboardView(view);
     if (view.type === 'stocktake') return renderStocktakeView(view);
+    if (view.type === 'waste') return renderWasteView(view);
     return renderCrudView(view);
   }).join('');
   setTab(state.activeTab || state.config.views[0].id);
@@ -765,14 +932,41 @@ document.addEventListener('click', async (event) => {
   const tab = event.target.closest('.tab');
   const action = event.target.closest('[data-action]');
   const expandEl = event.target.closest('[data-expand-stocktake]');
+  const expandWasteEl = event.target.closest('[data-expand-waste]');
   const saveBtn = event.target.closest('[data-stocktake-save]');
   const confirmBtn = event.target.closest('[data-stocktake-confirm]');
+  const wasteApproveBtn = event.target.closest('[data-waste-approve]');
+  const wasteDisposeBtn = event.target.closest('[data-waste-dispose]');
+  const createWasteFromBatchBtn = event.target.closest('[data-create-waste-from-batch]');
   const viewRequestsBtn = event.target.closest('[data-view-requests]');
   const closeModalBtn = event.target.closest('#close-modal');
   const jumpRequestBtn = event.target.closest('[data-jump-request]');
   const modal = event.target.closest('#request-modal');
 
   if (tab) setTab(tab.dataset.tab);
+
+  if (createWasteFromBatchBtn) {
+    const batchId = createWasteFromBatchBtn.dataset.createWasteFromBatch;
+    state.preselectedBatchId = batchId;
+    setTab('wastes');
+    setTimeout(() => {
+      const form = document.querySelector('#wastes form[data-create="wastes"]');
+      if (form) {
+        const batchSelect = form.querySelector('select[name="batchId"]');
+        if (batchSelect) {
+          batchSelect.value = batchId;
+          batchSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const quantityInput = form.querySelector('input[name="quantity"]');
+        if (quantityInput) {
+          const batch = state.db.batches?.find((b) => b.id === batchId);
+          if (batch) quantityInput.value = batch.quantity;
+        }
+      }
+    }, 50);
+    toast('已跳转到报废页面，请确认报废信息');
+    return;
+  }
 
   if (action) {
     try {
@@ -844,6 +1038,60 @@ document.addEventListener('click', async (event) => {
       toast(err.message);
     }
   }
+
+  if (expandWasteEl && !event.target.closest('button') && !event.target.closest('input') && !event.target.closest('select')) {
+    const wasteId = expandWasteEl.dataset.expandWaste;
+    state.expandedWaste = state.expandedWaste === wasteId ? null : wasteId;
+    refreshWasteList('wastes');
+  }
+
+  if (wasteApproveBtn) {
+    const wasteId = wasteApproveBtn.dataset.wasteApprove;
+    const waste = state.db.wastes?.find((w) => w.id === wasteId);
+    if (!waste) return;
+    const batch = state.db.batches?.find((b) => b.id === waste.batchId);
+    const unit = batch?.unit || '';
+    const ok = confirm(`审批通过报废申请「${waste.code || waste.title}」？\n申请报废：${waste.quantity}${unit}\n\n审批通过后进入待处置状态。`);
+    if (!ok) return;
+    try {
+      await api(`/api/wastes/${wasteId}/approve`, { method: 'POST' });
+      await load();
+      state.expandedWaste = wasteId;
+      refreshWasteList('wastes');
+      toast('审批已通过');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  if (wasteDisposeBtn) {
+    const wasteId = wasteDisposeBtn.dataset.wasteDispose;
+    const waste = state.db.wastes?.find((w) => w.id === wasteId);
+    if (!waste) return;
+    const batch = state.db.batches?.find((b) => b.id === waste.batchId);
+    const unit = batch?.unit || '';
+    const edits = state.wasteEdits[wasteId] || {};
+    const actualQty = edits.actualQuantity ?? waste.quantity;
+    const ok = confirm(`确认处置报废单「${waste.code || waste.title}」？\n实际处置：${actualQty}${unit}\n\n确认后将扣减批次库存，不可撤销。`);
+    if (!ok) return;
+    try {
+      await api(`/api/wastes/${wasteId}/dispose`, {
+        method: 'POST',
+        body: JSON.stringify({
+          actualQuantity: actualQty,
+          disposalMethod: edits.disposalMethod || waste.disposalMethod,
+          witness: edits.witness || waste.witness,
+          operator: edits.operator
+        })
+      });
+      await load();
+      state.expandedWaste = wasteId;
+      refreshWasteList('wastes');
+      toast('处置已确认，库存已扣减');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
 });
 
 document.addEventListener('input', (event) => {
@@ -851,6 +1099,8 @@ document.addEventListener('input', (event) => {
   if (crudView) {
     if (crudView.type === 'stocktake') {
       refreshStocktakeList(crudView.id);
+    } else if (crudView.type === 'waste') {
+      refreshWasteList(crudView.id);
     } else {
       const listEl = $(`#list-${crudView.id}`);
       if (listEl) listEl.innerHTML = renderList(crudView);
@@ -903,6 +1153,18 @@ document.addEventListener('input', (event) => {
       `;
     }
   }
+
+  const wasteInput = event.target.closest('.waste-input');
+  if (wasteInput) {
+    const wasteId = wasteInput.dataset.waste;
+    const field = wasteInput.dataset.field;
+    if (!state.wasteEdits[wasteId]) state.wasteEdits[wasteId] = {};
+    let val = wasteInput.value;
+    if (field === 'actualQuantity') {
+      val = Number(val || 0);
+    }
+    state.wasteEdits[wasteId][field] = val;
+  }
 });
 
 document.addEventListener('change', (event) => {
@@ -928,6 +1190,22 @@ document.addEventListener('submit', async (event) => {
       state.expandedStocktake = created.id;
       refreshStocktakeList('stocktakes');
       toast('盘点单已创建，请展开并录入实盘数量');
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
+  if (view?.type === 'waste' && form.dataset.wasteCreate !== undefined) {
+    const payload = values(form, view);
+    payload.status = view.defaults?.status || '待审批';
+    payload.history = undefined;
+    try {
+      const created = await api(`/api/${form.dataset.create}`, { method: 'POST', body: JSON.stringify(payload) });
+      form.reset();
+      await load();
+      state.expandedWaste = created.id;
+      refreshWasteList('wastes');
+      toast('报废申请已提交，等待审批');
     } catch (err) {
       toast(err.message);
     }
