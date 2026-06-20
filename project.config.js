@@ -340,7 +340,7 @@ module.exports = {
     { id: 'waste-reject', label: '驳回', collection: 'wastes', danger: true, patches: [{ field: 'status', value: '已驳回' }] }
   ],
   auditLog: {
-    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '回库闭环', '锁定', '可用', '报废', '盘点录入', '盘点确认', '确认处置', '报废审批(关联)', '报废扣减(关联)'],
+    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消'],
     targetCollections: ['batches', 'requests', 'wastes', 'stocktakes', 'suppliers', 'cabinets', 'projects']
   }
 };

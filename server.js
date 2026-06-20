@@ -556,6 +556,9 @@ app.patch('/api/stocktakes/:id/items', async (req, res) => {
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items 必须是数组' });
 
   const now = new Date().toISOString();
+  const beforeItems = JSON.parse(JSON.stringify(stocktake.items || []));
+  const beforeStatus = stocktake.status;
+
   stocktake.items = items.map((item) => {
     const batch = db.batches.find((b) => b.id === item.batchId);
     const book = Number(item.bookQuantity ?? batch?.quantity ?? 0);
@@ -569,21 +572,50 @@ app.patch('/api/stocktakes/:id/items', async (req, res) => {
     };
   });
 
-  const beforeStocktake = { ...stocktake };
-
-  stocktake.status = stocktake.items.length > 0 ? '录入中' : '草稿';
+  const afterStatus = stocktake.items.length > 0 ? '录入中' : '草稿';
+  stocktake.status = afterStatus;
   stocktake.updatedAt = now;
   stocktake.history = stocktake.history || [];
 
   const diffItems = stocktake.items.filter((i) => i.difference !== 0).length;
   stocktake.history.unshift(stamp('录入', `录入${stocktake.items.length}个批次，差异${diffItems}项`));
 
+  const itemChanges = {};
+  const beforeIds = new Set(beforeItems.map((i) => i.batchId));
+  const afterIds = new Set(stocktake.items.map((i) => i.batchId));
+  const allIds = [...new Set([...beforeIds, ...afterIds])];
+  let changedCount = 0;
+  for (const bid of allIds) {
+    const before = beforeItems.find((i) => i.batchId === bid);
+    const after = stocktake.items.find((i) => i.batchId === bid);
+    const b = db.batches.find((bb) => bb.id === bid);
+    const bLabel = b ? getTargetLabel(b, 'batches') : bid;
+    if (!before && after) {
+      itemChanges[`[新增] ${bLabel}`] = { before: null, after: `实际${after.actualQuantity} / 账面${after.bookQuantity}${after.difference !== 0 ? ' / 差异' + after.difference : ''}` };
+      changedCount++;
+    } else if (before && !after) {
+      itemChanges[`[移除] ${bLabel}`] = { before: `实际${before.actualQuantity} / 账面${before.bookQuantity}${before.difference !== 0 ? ' / 差异' + before.difference : ''}`, after: null };
+      changedCount++;
+    } else if (before && after && JSON.stringify(before) !== JSON.stringify(after)) {
+      const fields = [];
+      if (before.actualQuantity !== after.actualQuantity) fields.push(`实际${before.actualQuantity}→${after.actualQuantity}`);
+      if (before.bookQuantity !== after.bookQuantity) fields.push(`账面${before.bookQuantity}→${after.bookQuantity}`);
+      if (before.difference !== after.difference) fields.push(`差异${before.difference}→${after.difference}`);
+      if (before.remark !== after.remark) fields.push(`备注变化`);
+      itemChanges[`[变更] ${bLabel}`] = { before: '原数据', after: fields.join('，') || '字段调整' };
+      changedCount++;
+    }
+    if (changedCount >= 20) break;
+  }
+  if (beforeStatus !== afterStatus) itemChanges['status'] = { before: beforeStatus, after: afterStatus };
+  itemChanges['items'] = { before: `${beforeItems.length}个批次`, after: `${stocktake.items.length}个批次` };
+
   writeAuditLog(db, {
     actionType: '盘点录入',
     collection: 'stocktakes',
     targetId: stocktake.id,
     targetItem: stocktake,
-    beforeItem: beforeStocktake,
+    changes: itemChanges,
     note: `录入${stocktake.items.length}个批次，差异${diffItems}项`,
     operator: operator || stocktake.operator
   });
