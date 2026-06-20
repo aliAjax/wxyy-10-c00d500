@@ -150,9 +150,10 @@ app.get('/api/db', async (req, res) => {
   res.json(db);
 });
 
-app.post('/api/:collection', requireUser, async (req, res) => {
-  const db = await readDb();
+app.post('/api/:collection', requireUser, async (req, res, next) => {
   const { collection } = req.params;
+  if (collection === 'schedules') return next();
+  const db = await readDb();
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
 
   if (!checkPermission(req.currentUser, 'create', collection, res)) return;
@@ -204,9 +205,10 @@ app.post('/api/:collection', requireUser, async (req, res) => {
   res.status(201).json(item);
 });
 
-app.patch('/api/:collection/:id', requireUser, async (req, res) => {
-  const db = await readDb();
+app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
   const { collection, id } = req.params;
+  if (collection === 'schedules') return next();
+  const db = await readDb();
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
 
   if (!checkPermission(req.currentUser, 'update', collection, res)) return;
@@ -258,9 +260,11 @@ app.patch('/api/:collection/:id', requireUser, async (req, res) => {
   res.json(item);
 });
 
-app.delete('/api/:collection/:id', requireUser, async (req, res) => {
+app.delete('/api/:collection/:id', requireUser, async (req, res, next) => {
+  const { collection } = req.params;
+  if (collection === 'schedules') return next();
   const db = await readDb();
-  const { collection, id } = req.params;
+  const { id } = req.params;
   if (!Array.isArray(db[collection])) return res.status(404).json({ error: 'unknown collection' });
 
   if (!checkPermission(req.currentUser, 'delete', collection, res)) return;
@@ -1138,6 +1142,7 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
 
   const now = new Date();
   const errors = [];
+  const batchQtyMap = {};
   (schedule.items || []).forEach((item, idx) => {
     const lineNo = idx + 1;
     const batch = db.batches.find((b) => b.id === item.batchId);
@@ -1148,10 +1153,6 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
     if (batch.status !== '可用') {
       errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可出库`);
     }
-    const stockQty = Number(batch.quantity || 0);
-    if (item.quantity > stockQty) {
-      errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」库存(${stockQty})不足，申请${item.quantity}`);
-    }
     if (batch.expiresAt) {
       const expire = new Date(batch.expiresAt);
       if (expire < now) {
@@ -1160,6 +1161,16 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
     }
     if (LEVEL_RANK[batch.safetyLevel] < LEVEL_RANK[item.safetyLevel]) {
       errors.push(`第${lineNo}行：批次安全等级(${batch.safetyLevel})低于所需等级(${item.safetyLevel})`);
+    }
+    batchQtyMap[item.batchId] = (batchQtyMap[item.batchId] || 0) + Number(item.quantity || 0);
+  });
+
+  Object.entries(batchQtyMap).forEach(([batchId, totalQty]) => {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    const stockQty = Number(batch.quantity || 0);
+    if (totalQty > stockQty) {
+      errors.push(`批次「${batch.name}/${batch.batchNo}」调度申请合计${totalQty}，超过当前库存${stockQty}`);
     }
   });
 
@@ -1212,6 +1223,7 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
 
   const now = new Date();
   const errors = [];
+  const batchQtyMap = {};
   (schedule.items || []).forEach((item, idx) => {
     const lineNo = idx + 1;
     const batch = db.batches.find((b) => b.id === item.batchId);
@@ -1222,9 +1234,15 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
     if (batch.status !== '可用') {
       errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可出库`);
     }
+    batchQtyMap[item.batchId] = (batchQtyMap[item.batchId] || 0) + Number(item.quantity || 0);
+  });
+
+  Object.entries(batchQtyMap).forEach(([batchId, totalQty]) => {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) return;
     const stockQty = Number(batch.quantity || 0);
-    if (item.quantity > stockQty) {
-      errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」库存(${stockQty})不足，申请${item.quantity}`);
+    if (totalQty > stockQty) {
+      errors.push(`批次「${batch.name}/${batch.batchNo}」调度申请合计${totalQty}，超过当前库存${stockQty}`);
     }
   });
 

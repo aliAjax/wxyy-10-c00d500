@@ -60,14 +60,110 @@
       "batchNo": "PY-A17-2605",
       "cabinetId": "cabinet-seed-1",
       "safetyLevel": "高",
-      "quantity": 14,
+      "quantity": 2,
       "unit": "罐",
       "expiresAt": "2026-10-30",
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-06-16T09:00:00.000Z",
-      "updatedAt": "2026-06-20T10:18:28.118Z",
+      "updatedAt": "2026-06-20T15:42:03.681Z",
       "history": [
+        {
+          "at": "2026-06-20T15:42:03.681Z",
+          "action": "调度出库",
+          "note": "调度单：TEST-ISSUE-003，出库：-1罐，剩余：2罐",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
+        {
+          "at": "2026-06-20T15:42:03.681Z",
+          "action": "调度出库",
+          "note": "调度单：TEST-ISSUE-003，出库：-1罐，剩余：3罐",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
+        {
+          "at": "2026-06-20T15:42:03.678Z",
+          "action": "调度审批通过",
+          "note": "调度单：TEST-ISSUE-003，申请：1罐",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
+        {
+          "at": "2026-06-20T15:42:03.678Z",
+          "action": "调度审批通过",
+          "note": "调度单：TEST-ISSUE-003，申请：1罐",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
+        {
+          "at": "2026-06-20T15:41:38.315Z",
+          "action": "调度出库",
+          "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
+        {
+          "at": "2026-06-20T15:41:38.315Z",
+          "action": "调度出库",
+          "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
+        {
+          "at": "2026-06-20T15:41:32.732Z",
+          "action": "调度审批通过",
+          "note": "调度单：TEST-ISSUE-001，申请：5罐",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
+        {
+          "at": "2026-06-20T15:41:32.732Z",
+          "action": "调度审批通过",
+          "note": "调度单：TEST-ISSUE-001，申请：5罐",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
         {
           "at": "2026-06-20T10:18:28.118Z",
           "action": "出库",
@@ -169,8 +265,20 @@
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-05-01T11:00:00.000Z",
-      "updatedAt": "2026-06-20T07:35:10.519Z",
+      "updatedAt": "2026-06-20T15:48:08.130Z",
       "history": [
+        {
+          "at": "2026-06-20T15:48:08.130Z",
+          "action": "调度审批通过",
+          "note": "调度单：VERIFY-ROUTE-1781970488，申请：1根",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
         {
           "at": "2026-06-20T07:35:10.519Z",
           "action": "盘点调整",
@@ -714,9 +822,2345 @@
           "operatorLabel": "王芳（演出负责人）"
         }
       ]
+    },
+    {
+      "id": "schedules-1781970032527-dae46",
+      "code": "TEST-003",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-12 20:00-20:30",
+      "operator": "测试员",
+      "note": "测试调度单",
+      "status": "调度待审批",
+      "totalQuantity": 2,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "测试喷点",
+          "safetyLevel": "高",
+          "quantity": 2,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:40:32.527Z",
+      "updatedAt": "2026-06-20T15:40:32.527Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:40:32.527Z",
+          "action": "调度创建",
+          "note": "调度单：TEST-003，演出：海港音乐节开场，共1条明细，合计2单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ]
+    },
+    {
+      "id": "schedules-1781970058502-93e28",
+      "code": "TEST-SUM-001",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-13 20:00-20:30",
+      "operator": "测试员",
+      "note": "测试同批次汇总校验",
+      "status": "调度待审批",
+      "totalQuantity": 20,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点A",
+          "safetyLevel": "高",
+          "quantity": 10,
+          "returned": 0,
+          "wasted": 0
+        },
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点B",
+          "safetyLevel": "高",
+          "quantity": 10,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:40:58.502Z",
+      "updatedAt": "2026-06-20T15:40:58.502Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:40:58.502Z",
+          "action": "调度创建",
+          "note": "调度单：TEST-SUM-001，演出：海港音乐节开场，共2条明细，合计20单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ]
+    },
+    {
+      "id": "schedules-1781970086589-8c9b8",
+      "code": "TEST-ISSUE-001",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-14 20:00-20:30",
+      "operator": "测试员",
+      "note": "测试出库汇总校验",
+      "status": "调度已出库",
+      "totalQuantity": 10,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点A",
+          "safetyLevel": "高",
+          "quantity": 5,
+          "returned": 0,
+          "wasted": 0
+        },
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点B",
+          "safetyLevel": "高",
+          "quantity": 5,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:41:26.589Z",
+      "updatedAt": "2026-06-20T15:41:38.314Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:41:38.315Z",
+          "action": "调度出库",
+          "note": "出库人：张伟（库管员），共2条明细，合计出库10单位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
+        {
+          "at": "2026-06-20T15:41:32.732Z",
+          "action": "调度审批通过",
+          "note": "审批人：李强（安全负责人），共2条明细",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
+        {
+          "at": "2026-06-20T15:41:26.589Z",
+          "action": "调度创建",
+          "note": "调度单：TEST-ISSUE-001，演出：海港音乐节开场，共2条明细，合计10单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ],
+      "approver": "李强（安全负责人）",
+      "approverInfo": {
+        "id": "user-safety-1",
+        "name": "李强",
+        "role": "safety",
+        "roleLabel": "安全负责人"
+      },
+      "approvedAt": "2026-06-20T15:41:32.732Z",
+      "issuer": "张伟（库管员）",
+      "issuerInfo": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "issuedAt": "2026-06-20T15:41:38.314Z"
+    },
+    {
+      "id": "schedules-1781970105121-265e1",
+      "code": "TEST-ISSUE-002",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-15 20:00-20:30",
+      "operator": "测试员",
+      "note": "测试出库汇总校验2",
+      "status": "调度待审批",
+      "totalQuantity": 6,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点C",
+          "safetyLevel": "高",
+          "quantity": 3,
+          "returned": 0,
+          "wasted": 0
+        },
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点D",
+          "safetyLevel": "高",
+          "quantity": 3,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:41:45.121Z",
+      "updatedAt": "2026-06-20T15:41:45.121Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:41:45.121Z",
+          "action": "调度创建",
+          "note": "调度单：TEST-ISSUE-002，演出：海港音乐节开场，共2条明细，合计6单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ]
+    },
+    {
+      "id": "schedules-1781970123675-8710a",
+      "code": "TEST-ISSUE-003",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-16 20:00-20:30",
+      "operator": "测试员",
+      "note": "测试出库汇总",
+      "status": "调度已出库",
+      "totalQuantity": 2,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点C",
+          "safetyLevel": "高",
+          "quantity": 1,
+          "returned": 0,
+          "wasted": 0
+        },
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "喷点D",
+          "safetyLevel": "高",
+          "quantity": 1,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:42:03.675Z",
+      "updatedAt": "2026-06-20T15:42:03.681Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:42:03.681Z",
+          "action": "调度出库",
+          "note": "出库人：张伟（库管员），共2条明细，合计出库2单位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
+        {
+          "at": "2026-06-20T15:42:03.678Z",
+          "action": "调度审批通过",
+          "note": "审批人：李强（安全负责人），共2条明细",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
+        {
+          "at": "2026-06-20T15:42:03.675Z",
+          "action": "调度创建",
+          "note": "调度单：TEST-ISSUE-003，演出：海港音乐节开场，共2条明细，合计2单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ],
+      "approver": "李强（安全负责人）",
+      "approverInfo": {
+        "id": "user-safety-1",
+        "name": "李强",
+        "role": "safety",
+        "roleLabel": "安全负责人"
+      },
+      "approvedAt": "2026-06-20T15:42:03.678Z",
+      "issuer": "张伟（库管员）",
+      "issuerInfo": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "issuedAt": "2026-06-20T15:42:03.681Z"
+    },
+    {
+      "id": "schedules-1781970488067-d4547",
+      "code": "VERIFY-ROUTE-1781970488",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-11 20:00-20:20",
+      "operator": "验证员",
+      "note": "",
+      "status": "调度已审批",
+      "totalQuantity": 1,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-5",
+          "sprayPoint": "A",
+          "safetyLevel": "中",
+          "quantity": 1,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:48:08.067Z",
+      "updatedAt": "2026-06-20T15:48:08.130Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:48:08.130Z",
+          "action": "调度审批通过",
+          "note": "审批人：李强（安全负责人），共1条明细",
+          "operator": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          },
+          "operatorLabel": "李强（安全负责人）"
+        },
+        {
+          "at": "2026-06-20T15:48:08.067Z",
+          "action": "调度创建",
+          "note": "调度单：VERIFY-ROUTE-1781970488，演出：海港音乐节开场，共1条明细，合计1单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ],
+      "approver": "李强（安全负责人）",
+      "approverInfo": {
+        "id": "user-safety-1",
+        "name": "李强",
+        "role": "safety",
+        "roleLabel": "安全负责人"
+      },
+      "approvedAt": "2026-06-20T15:48:08.130Z"
+    },
+    {
+      "id": "schedules-1781970488164-8ddc8",
+      "code": "VERIFY-SUM-1781970488",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-11 20:30-20:50",
+      "operator": "验证员",
+      "note": "",
+      "status": "调度待审批",
+      "totalQuantity": 4,
+      "totalReturned": 0,
+      "totalWasted": 0,
+      "items": [
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "A",
+          "safetyLevel": "高",
+          "quantity": 2,
+          "returned": 0,
+          "wasted": 0
+        },
+        {
+          "batchId": "batch-seed-1",
+          "sprayPoint": "B",
+          "safetyLevel": "高",
+          "quantity": 2,
+          "returned": 0,
+          "wasted": 0
+        }
+      ],
+      "createdAt": "2026-06-20T15:48:08.164Z",
+      "updatedAt": "2026-06-20T15:48:08.164Z",
+      "createdBy": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "history": [
+        {
+          "at": "2026-06-20T15:48:08.164Z",
+          "action": "调度创建",
+          "note": "调度单：VERIFY-SUM-1781970488，演出：海港音乐节开场，共2条明细，合计4单位",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        }
+      ]
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1781970488164-7e277",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970488164-8ddc8",
+      "targetLabel": "schedules-1781970488164-8ddc8",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970488164-8ddc8"
+        },
+        "code": {
+          "after": "VERIFY-SUM-1781970488"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-11 20:30-20:50"
+        },
+        "operator": {
+          "after": "验证员"
+        },
+        "note": {
+          "after": ""
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 4
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "A",
+              "safetyLevel": "高",
+              "quantity": 2,
+              "returned": 0,
+              "wasted": 0
+            },
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "B",
+              "safetyLevel": "高",
+              "quantity": 2,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:48:08.164Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:48:08.164Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:48:08.164Z",
+              "action": "调度创建",
+              "note": "调度单：VERIFY-SUM-1781970488，演出：海港音乐节开场，共2条明细，合计4单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细2条，合计4单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:48:08.164Z"
+    },
+    {
+      "id": "auditLogs-1781970488130-0b008",
+      "actionType": "调度审批通过",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970488067-d4547",
+      "targetLabel": "schedules-1781970488067-d4547",
+      "changes": {
+        "status": {
+          "before": "调度待审批",
+          "after": "调度已审批"
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:48:08.067Z",
+          "after": "2026-06-20T15:48:08.130Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:48:08.067Z",
+              "action": "调度创建",
+              "note": "调度单：VERIFY-ROUTE-1781970488，演出：海港音乐节开场，共1条明细，合计1单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:48:08.130Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共1条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:48:08.067Z",
+              "action": "调度创建",
+              "note": "调度单：VERIFY-ROUTE-1781970488，演出：海港音乐节开场，共1条明细，合计1单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        },
+        "approver": {
+          "after": "李强（安全负责人）"
+        },
+        "approverInfo": {
+          "after": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          }
+        },
+        "approvedAt": {
+          "after": "2026-06-20T15:48:08.130Z"
+        }
+      },
+      "note": "审批人：李强（安全负责人），共1条明细",
+      "operator": "李强（安全负责人）",
+      "operatorInfo": {
+        "id": "user-safety-1",
+        "username": "safety",
+        "name": "李强",
+        "role": "safety",
+        "roleLabel": "安全负责人"
+      },
+      "createdAt": "2026-06-20T15:48:08.130Z"
+    },
+    {
+      "id": "auditLogs-1781970488067-55c63",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970488067-d4547",
+      "targetLabel": "schedules-1781970488067-d4547",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970488067-d4547"
+        },
+        "code": {
+          "after": "VERIFY-ROUTE-1781970488"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-11 20:00-20:20"
+        },
+        "operator": {
+          "after": "验证员"
+        },
+        "note": {
+          "after": ""
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 1
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-5",
+              "sprayPoint": "A",
+              "safetyLevel": "中",
+              "quantity": 1,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:48:08.067Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:48:08.067Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:48:08.067Z",
+              "action": "调度创建",
+              "note": "调度单：VERIFY-ROUTE-1781970488，演出：海港音乐节开场，共1条明细，合计1单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细1条，合计1单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:48:08.067Z"
+    },
+    {
+      "id": "auditLogs-1781970123681-fa8d5",
+      "actionType": "调度出库(关联)",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": {
+        "quantity": {
+          "before": 4,
+          "after": 2
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:42:03.678Z",
+          "after": "2026-06-20T15:42:03.681Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:42:03.681Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-003，出库：-1罐，剩余：2罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.681Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-003，出库：-1罐，剩余：3罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ]
+        }
+      },
+      "note": "调度单：TEST-ISSUE-003，出库：-1罐",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T15:42:03.681Z"
+    },
+    {
+      "id": "auditLogs-1781970123681-82f7e",
+      "actionType": "调度出库(关联)",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": {
+        "quantity": {
+          "before": 4,
+          "after": 2
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:42:03.678Z",
+          "after": "2026-06-20T15:42:03.681Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:42:03.681Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-003，出库：-1罐，剩余：2罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.681Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-003，出库：-1罐，剩余：3罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-003，申请：1罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ]
+        }
+      },
+      "note": "调度单：TEST-ISSUE-003，出库：-1罐",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T15:42:03.681Z"
+    },
+    {
+      "id": "auditLogs-1781970123681-9ef5b",
+      "actionType": "调度出库",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970123675-8710a",
+      "targetLabel": "schedules-1781970123675-8710a",
+      "changes": {
+        "status": {
+          "before": "调度已审批",
+          "after": "调度已出库"
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:42:03.678Z",
+          "after": "2026-06-20T15:42:03.681Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共2条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.675Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-003，演出：海港音乐节开场，共2条明细，合计2单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:42:03.681Z",
+              "action": "调度出库",
+              "note": "出库人：张伟（库管员），共2条明细，合计出库2单位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共2条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.675Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-003，演出：海港音乐节开场，共2条明细，合计2单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        },
+        "issuer": {
+          "after": "张伟（库管员）"
+        },
+        "issuerInfo": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "issuedAt": {
+          "after": "2026-06-20T15:42:03.681Z"
+        }
+      },
+      "note": "出库人：张伟（库管员），共2条明细，合计2单位",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T15:42:03.681Z"
+    },
+    {
+      "id": "auditLogs-1781970123678-6b518",
+      "actionType": "调度审批通过",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970123675-8710a",
+      "targetLabel": "schedules-1781970123675-8710a",
+      "changes": {
+        "status": {
+          "before": "调度待审批",
+          "after": "调度已审批"
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:42:03.675Z",
+          "after": "2026-06-20T15:42:03.678Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:42:03.675Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-003，演出：海港音乐节开场，共2条明细，合计2单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:42:03.678Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共2条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:42:03.675Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-003，演出：海港音乐节开场，共2条明细，合计2单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        },
+        "approver": {
+          "after": "李强（安全负责人）"
+        },
+        "approverInfo": {
+          "after": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          }
+        },
+        "approvedAt": {
+          "after": "2026-06-20T15:42:03.678Z"
+        }
+      },
+      "note": "审批人：李强（安全负责人），共2条明细",
+      "operator": "李强（安全负责人）",
+      "operatorInfo": {
+        "id": "user-safety-1",
+        "username": "safety",
+        "name": "李强",
+        "role": "safety",
+        "roleLabel": "安全负责人"
+      },
+      "createdAt": "2026-06-20T15:42:03.678Z"
+    },
+    {
+      "id": "auditLogs-1781970123675-ef4b9",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970123675-8710a",
+      "targetLabel": "schedules-1781970123675-8710a",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970123675-8710a"
+        },
+        "code": {
+          "after": "TEST-ISSUE-003"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-16 20:00-20:30"
+        },
+        "operator": {
+          "after": "测试员"
+        },
+        "note": {
+          "after": "测试出库汇总"
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 2
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点C",
+              "safetyLevel": "高",
+              "quantity": 1,
+              "returned": 0,
+              "wasted": 0
+            },
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点D",
+              "safetyLevel": "高",
+              "quantity": 1,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:42:03.675Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:42:03.675Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:42:03.675Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-003，演出：海港音乐节开场，共2条明细，合计2单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细2条，合计2单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:42:03.675Z"
+    },
+    {
+      "id": "auditLogs-1781970105121-e6a8d",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970105121-265e1",
+      "targetLabel": "schedules-1781970105121-265e1",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970105121-265e1"
+        },
+        "code": {
+          "after": "TEST-ISSUE-002"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-15 20:00-20:30"
+        },
+        "operator": {
+          "after": "测试员"
+        },
+        "note": {
+          "after": "测试出库汇总校验2"
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 6
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点C",
+              "safetyLevel": "高",
+              "quantity": 3,
+              "returned": 0,
+              "wasted": 0
+            },
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点D",
+              "safetyLevel": "高",
+              "quantity": 3,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:41:45.121Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:41:45.121Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:41:45.121Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-002，演出：海港音乐节开场，共2条明细，合计6单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细2条，合计6单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:41:45.121Z"
+    },
+    {
+      "id": "auditLogs-1781970098315-8b66e",
+      "actionType": "调度出库(关联)",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": {
+        "quantity": {
+          "before": 14,
+          "after": 4
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:41:32.732Z",
+          "after": "2026-06-20T15:41:38.314Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ]
+        }
+      },
+      "note": "调度单：TEST-ISSUE-001，出库：-5罐",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T15:41:38.315Z"
+    },
+    {
+      "id": "auditLogs-1781970098315-231df",
+      "actionType": "调度出库(关联)",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": {
+        "quantity": {
+          "before": 14,
+          "after": 4
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:41:32.732Z",
+          "after": "2026-06-20T15:41:38.314Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：4罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "调度单：TEST-ISSUE-001，出库：-5罐，剩余：9罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "调度单：TEST-ISSUE-001，申请：5罐",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T10:18:28.118Z",
+              "action": "出库",
+              "note": "数量调整"
+            },
+            {
+              "at": "2026-06-16T09:00:00.000Z",
+              "action": "创建",
+              "note": "入库18罐"
+            }
+          ]
+        }
+      },
+      "note": "调度单：TEST-ISSUE-001，出库：-5罐",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T15:41:38.315Z"
+    },
+    {
+      "id": "auditLogs-1781970098315-119f9",
+      "actionType": "调度出库",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970086589-8c9b8",
+      "targetLabel": "schedules-1781970086589-8c9b8",
+      "changes": {
+        "status": {
+          "before": "调度已审批",
+          "after": "调度已出库"
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:41:32.732Z",
+          "after": "2026-06-20T15:41:38.314Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共2条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:26.589Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-001，演出：海港音乐节开场，共2条明细，合计10单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:41:38.315Z",
+              "action": "调度出库",
+              "note": "出库人：张伟（库管员），共2条明细，合计出库10单位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            },
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共2条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:26.589Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-001，演出：海港音乐节开场，共2条明细，合计10单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        },
+        "issuer": {
+          "after": "张伟（库管员）"
+        },
+        "issuerInfo": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "issuedAt": {
+          "after": "2026-06-20T15:41:38.314Z"
+        }
+      },
+      "note": "出库人：张伟（库管员），共2条明细，合计10单位",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-20T15:41:38.315Z"
+    },
+    {
+      "id": "auditLogs-1781970092732-64437",
+      "actionType": "调度审批通过",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970086589-8c9b8",
+      "targetLabel": "schedules-1781970086589-8c9b8",
+      "changes": {
+        "status": {
+          "before": "调度待审批",
+          "after": "调度已审批"
+        },
+        "updatedAt": {
+          "before": "2026-06-20T15:41:26.589Z",
+          "after": "2026-06-20T15:41:32.732Z"
+        },
+        "history": {
+          "before": [
+            {
+              "at": "2026-06-20T15:41:26.589Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-001，演出：海港音乐节开场，共2条明细，合计10单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ],
+          "after": [
+            {
+              "at": "2026-06-20T15:41:32.732Z",
+              "action": "调度审批通过",
+              "note": "审批人：李强（安全负责人），共2条明细",
+              "operator": {
+                "id": "user-safety-1",
+                "name": "李强",
+                "role": "safety",
+                "roleLabel": "安全负责人"
+              },
+              "operatorLabel": "李强（安全负责人）"
+            },
+            {
+              "at": "2026-06-20T15:41:26.589Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-001，演出：海港音乐节开场，共2条明细，合计10单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        },
+        "approver": {
+          "after": "李强（安全负责人）"
+        },
+        "approverInfo": {
+          "after": {
+            "id": "user-safety-1",
+            "name": "李强",
+            "role": "safety",
+            "roleLabel": "安全负责人"
+          }
+        },
+        "approvedAt": {
+          "after": "2026-06-20T15:41:32.732Z"
+        }
+      },
+      "note": "审批人：李强（安全负责人），共2条明细",
+      "operator": "李强（安全负责人）",
+      "operatorInfo": {
+        "id": "user-safety-1",
+        "username": "safety",
+        "name": "李强",
+        "role": "safety",
+        "roleLabel": "安全负责人"
+      },
+      "createdAt": "2026-06-20T15:41:32.732Z"
+    },
+    {
+      "id": "auditLogs-1781970086589-bfc29",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970086589-8c9b8",
+      "targetLabel": "schedules-1781970086589-8c9b8",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970086589-8c9b8"
+        },
+        "code": {
+          "after": "TEST-ISSUE-001"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-14 20:00-20:30"
+        },
+        "operator": {
+          "after": "测试员"
+        },
+        "note": {
+          "after": "测试出库汇总校验"
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 10
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点A",
+              "safetyLevel": "高",
+              "quantity": 5,
+              "returned": 0,
+              "wasted": 0
+            },
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点B",
+              "safetyLevel": "高",
+              "quantity": 5,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:41:26.589Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:41:26.589Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:41:26.589Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-ISSUE-001，演出：海港音乐节开场，共2条明细，合计10单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细2条，合计10单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:41:26.589Z"
+    },
+    {
+      "id": "auditLogs-1781970058502-9fed1",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970058502-93e28",
+      "targetLabel": "schedules-1781970058502-93e28",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970058502-93e28"
+        },
+        "code": {
+          "after": "TEST-SUM-001"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-13 20:00-20:30"
+        },
+        "operator": {
+          "after": "测试员"
+        },
+        "note": {
+          "after": "测试同批次汇总校验"
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 20
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点A",
+              "safetyLevel": "高",
+              "quantity": 10,
+              "returned": 0,
+              "wasted": 0
+            },
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "喷点B",
+              "safetyLevel": "高",
+              "quantity": 10,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:40:58.502Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:40:58.502Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:40:58.502Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-SUM-001，演出：海港音乐节开场，共2条明细，合计20单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细2条，合计20单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:40:58.502Z"
+    },
+    {
+      "id": "auditLogs-1781970032527-90c7d",
+      "actionType": "调度创建",
+      "targetCollection": "schedules",
+      "targetId": "schedules-1781970032527-dae46",
+      "targetLabel": "schedules-1781970032527-dae46",
+      "changes": {
+        "id": {
+          "after": "schedules-1781970032527-dae46"
+        },
+        "code": {
+          "after": "TEST-003"
+        },
+        "projectId": {
+          "after": "project-seed-1"
+        },
+        "showName": {
+          "after": "海港音乐节开场"
+        },
+        "venue": {
+          "after": "南岸露天剧场"
+        },
+        "useWindow": {
+          "after": "2026-07-12 20:00-20:30"
+        },
+        "operator": {
+          "after": "测试员"
+        },
+        "note": {
+          "after": "测试调度单"
+        },
+        "status": {
+          "after": "调度待审批"
+        },
+        "totalQuantity": {
+          "after": 2
+        },
+        "totalReturned": {
+          "after": 0
+        },
+        "totalWasted": {
+          "after": 0
+        },
+        "items": {
+          "after": [
+            {
+              "batchId": "batch-seed-1",
+              "sprayPoint": "测试喷点",
+              "safetyLevel": "高",
+              "quantity": 2,
+              "returned": 0,
+              "wasted": 0
+            }
+          ]
+        },
+        "createdAt": {
+          "after": "2026-06-20T15:40:32.527Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T15:40:32.527Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T15:40:32.527Z",
+              "action": "调度创建",
+              "note": "调度单：TEST-003，演出：海港音乐节开场，共1条明细，合计2单位",
+              "operator": {
+                "id": "user-show-1",
+                "name": "王芳",
+                "role": "show",
+                "roleLabel": "演出负责人"
+              },
+              "operatorLabel": "王芳（演出负责人）"
+            }
+          ]
+        }
+      },
+      "note": "演出：海港音乐节开场，明细1条，合计2单位",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-20T15:40:32.527Z"
+    },
     {
       "id": "auditLogs-1781960094304-2d367",
       "actionType": "创建",
