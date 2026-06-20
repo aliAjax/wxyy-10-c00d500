@@ -203,13 +203,8 @@
       "supplierId": "supplier-seed-1",
       "status": "已报废",
       "createdAt": "2026-06-10T10:00:00.000Z",
-      "updatedAt": "2026-06-20T09:51:07.324Z",
+      "updatedAt": "2026-06-20T09:11:26.442Z",
       "history": [
-        {
-          "at": "2026-06-20T09:51:07.324Z",
-          "action": "报废",
-          "note": "状态流转"
-        },
         {
           "at": "2026-06-20T09:11:26.442Z",
           "action": "报废扣减",
@@ -654,66 +649,6 @@
       "witness": "",
       "disposedAt": "2026-06-20T09:11:26.442Z",
       "disposedBy": "测试"
-    },
-    {
-      "id": "wastes-1781948894432-35dc1",
-      "code": "BF-TEST-002",
-      "title": "强制状态测试",
-      "batchId": "batch-seed-1",
-      "quantity": 1,
-      "reason": "测试",
-      "applicant": "测试员",
-      "status": "待审批",
-      "actualQuantity": 0,
-      "createdAt": "2026-06-20T09:48:14.432Z",
-      "updatedAt": "2026-06-20T09:48:14.432Z",
-      "history": [
-        {
-          "at": "2026-06-20T09:48:14.433Z",
-          "action": "创建申请",
-          "note": "批次：冷焰火粉A17 / PY-A17-2605，申请报废：1罐，原因：测试"
-        }
-      ]
-    },
-    {
-      "id": "wastes-1781948914797-9a02f",
-      "code": "BF-TEST-003",
-      "title": "PATCH测试",
-      "batchId": "batch-seed-1",
-      "quantity": 1,
-      "reason": "测试",
-      "applicant": "测试员",
-      "status": "待审批",
-      "actualQuantity": 0,
-      "createdAt": "2026-06-20T09:48:34.797Z",
-      "updatedAt": "2026-06-20T09:48:34.797Z",
-      "history": [
-        {
-          "at": "2026-06-20T09:48:34.797Z",
-          "action": "创建申请",
-          "note": "批次：冷焰火粉A17 / PY-A17-2605，申请报废：1罐，原因：测试"
-        }
-      ]
-    },
-    {
-      "id": "wastes-1781948936700-570f9",
-      "code": "BF-TEST-PATCH",
-      "title": "PATCH数量测试",
-      "batchId": "batch-seed-1",
-      "quantity": 5,
-      "reason": "测试",
-      "applicant": "测试员",
-      "status": "待审批",
-      "actualQuantity": 0,
-      "createdAt": "2026-06-20T09:48:56.700Z",
-      "updatedAt": "2026-06-20T09:48:56.750Z",
-      "history": [
-        {
-          "at": "2026-06-20T09:48:56.701Z",
-          "action": "创建申请",
-          "note": "批次：冷焰火粉A17 / PY-A17-2605，申请报废：1罐，原因：测试"
-        }
-      ]
     }
   ]
 }
