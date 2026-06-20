@@ -624,6 +624,293 @@ app.patch('/api/stocktakes/:id/items', async (req, res) => {
   res.json(stocktake);
 });
 
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (!lines.length) return { headers: [], rows: [] };
+  const headers = lines[0].split(',').map((h) => h.trim());
+  const rows = lines.slice(1).map((line) => {
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  });
+  return { headers, rows };
+}
+
+const BATCH_REQUIRED_FIELDS = ['name', 'category', 'batchNo', 'quantity', 'unit', 'expiresAt'];
+const BATCH_FIELD_LABELS = {
+  name: '药剂名称',
+  category: '品类',
+  batchNo: '批次号',
+  supplier: '供应商',
+  cabinet: '存放柜位',
+  safetyLevel: '安全等级',
+  quantity: '库存数量',
+  unit: '单位',
+  expiresAt: '有效期',
+  status: '状态'
+};
+
+function normalizeHeader(header) {
+  const map = {
+    '药剂名称': 'name',
+    '名称': 'name',
+    '品名': 'name',
+    '品类': 'category',
+    '类别': 'category',
+    '分类': 'category',
+    '批次号': 'batchNo',
+    '批次': 'batchNo',
+    '批号': 'batchNo',
+    '供应商': 'supplier',
+    '供应商名称': 'supplier',
+    '存放柜位': 'cabinet',
+    '柜位': 'cabinet',
+    '防爆柜': 'cabinet',
+    '安全等级': 'safetyLevel',
+    '等级': 'safetyLevel',
+    '库存数量': 'quantity',
+    '数量': 'quantity',
+    '库存': 'quantity',
+    '单位': 'unit',
+    '计量单位': 'unit',
+    '有效期': 'expiresAt',
+    '有效期至': 'expiresAt',
+    '到期日': 'expiresAt',
+    '状态': 'status'
+  };
+  return map[header] || header;
+}
+
+function validateBatchRow(row, headers, db, rowIndex) {
+  const errors = [];
+  const data = {};
+  const missing = [];
+
+  headers.forEach((header, idx) => {
+    const field = normalizeHeader(header);
+    data[field] = row[idx] || '';
+  });
+
+  for (const field of BATCH_REQUIRED_FIELDS) {
+    if (!data[field] || String(data[field]).trim() === '') {
+      missing.push(BATCH_FIELD_LABELS[field] || field);
+    }
+  }
+  if (missing.length) {
+    errors.push(`缺失必填项：${missing.join('、')}`);
+  }
+
+  if (data.quantity !== undefined && data.quantity !== '') {
+    const qty = Number(data.quantity);
+    if (isNaN(qty) || qty < 0) {
+      errors.push('数量格式错误');
+    }
+  }
+
+  if (data.expiresAt) {
+    const date = new Date(data.expiresAt);
+    if (isNaN(date.getTime())) {
+      errors.push('有效期格式错误');
+    }
+  }
+
+  let supplierId = null;
+  if (data.supplier) {
+    const supplier = db.suppliers?.find((s) => s.name === data.supplier);
+    if (supplier) {
+      supplierId = supplier.id;
+    } else {
+      errors.push(`供应商「${data.supplier}」不存在`);
+    }
+  }
+
+  let cabinetId = null;
+  if (data.cabinet) {
+    const cabinet = db.cabinets?.find((c) => c.code === data.cabinet);
+    if (cabinet) {
+      cabinetId = cabinet.id;
+    } else {
+      errors.push(`柜位「${data.cabinet}」不存在`);
+    }
+  }
+
+  const batchData = {
+    name: data.name || '',
+    category: data.category || '',
+    batchNo: data.batchNo || '',
+    supplierId: supplierId || '',
+    cabinetId: cabinetId || '',
+    safetyLevel: data.safetyLevel || '低',
+    quantity: data.quantity ? Number(data.quantity) : 0,
+    unit: data.unit || '罐',
+    expiresAt: data.expiresAt || '',
+    status: data.status || '可用'
+  };
+
+  return {
+    rowIndex,
+    data: batchData,
+    raw: row,
+    errors,
+    isValid: errors.length === 0
+  };
+}
+
+app.post('/api/batches/import-preview', async (req, res) => {
+  try {
+    const { csvText } = req.body;
+    if (!csvText || !csvText.trim()) {
+      return res.status(400).json({ error: 'CSV内容不能为空' });
+    }
+
+    const db = await readDb();
+    const { headers, rows } = parseCsv(csvText);
+
+    if (!headers.length) {
+      return res.status(400).json({ error: '无法解析CSV表头' });
+    }
+
+    const normalizedHeaders = headers.map(normalizeHeader);
+    const results = rows.map((row, idx) => validateBatchRow(row, headers, db, idx + 2));
+
+    const validRows = results.filter((r) => r.isValid);
+    const errorRows = results.filter((r) => !r.isValid);
+
+    const batchNos = validRows.map((r) => r.data.batchNo).filter(Boolean);
+    const duplicateInCsv = [];
+    const seen = new Set();
+    for (const no of batchNos) {
+      if (seen.has(no)) {
+        if (!duplicateInCsv.includes(no)) duplicateInCsv.push(no);
+      } else {
+        seen.add(no);
+      }
+    }
+
+    const duplicateInDb = [];
+    for (const no of batchNos) {
+      const exists = db.batches?.some((b) => b.batchNo === no);
+      if (exists) duplicateInDb.push(no);
+    }
+
+    const allDuplicates = [...new Set([...duplicateInCsv, ...duplicateInDb])];
+
+    validRows.forEach((r) => {
+      if (allDuplicates.includes(r.data.batchNo)) {
+        r.isValid = false;
+        const dupType = [];
+        if (duplicateInCsv.includes(r.data.batchNo)) dupType.push('CSV内重复');
+        if (duplicateInDb.includes(r.data.batchNo)) dupType.push('系统已存在');
+        r.errors.push(`批次号重复（${dupType.join('、')}）`);
+      }
+    });
+
+    const finalValidRows = results.filter((r) => r.isValid);
+    const finalErrorRows = results.filter((r) => !r.isValid);
+
+    const missingCount = finalErrorRows.filter((r) =>
+      r.errors.some((e) => e.includes('缺失必填项'))
+    ).length;
+    const quantityErrorCount = finalErrorRows.filter((r) =>
+      r.errors.some((e) => e.includes('数量格式错误'))
+    ).length;
+
+    res.json({
+      headers: normalizedHeaders,
+      rawHeaders: headers,
+      totalRows: rows.length,
+      validCount: finalValidRows.length,
+      errorCount: finalErrorRows.length,
+      duplicateBatchNos: allDuplicates,
+      missingCount,
+      quantityErrorCount,
+      validRows: finalValidRows,
+      errorRows: finalErrorRows
+    });
+  } catch (err) {
+    res.status(500).json({ error: '解析失败：' + err.message });
+  }
+});
+
+app.post('/api/batches/import-confirm', async (req, res) => {
+  try {
+    const { rows, operator } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: '没有可导入的数据' });
+    }
+
+    const db = await readDb();
+    const now = new Date().toISOString();
+    const imported = [];
+    const failed = [];
+
+    for (const rowData of rows) {
+      const batchNo = rowData.batchNo;
+      if (db.batches.some((b) => b.batchNo === batchNo)) {
+        failed.push({ batchNo, error: '批次号已存在' });
+        continue;
+      }
+
+      const item = {
+        id: `batches-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+        name: rowData.name,
+        category: rowData.category,
+        batchNo: rowData.batchNo,
+        supplierId: rowData.supplierId || '',
+        cabinetId: rowData.cabinetId || '',
+        safetyLevel: rowData.safetyLevel || '低',
+        quantity: Number(rowData.quantity || 0),
+        unit: rowData.unit || '罐',
+        expiresAt: rowData.expiresAt,
+        status: rowData.status || '可用',
+        createdAt: now,
+        updatedAt: now,
+        history: [stamp('批量导入', `导入${rowData.quantity || 0}${rowData.unit || '罐'}，操作员：${operator || '系统'}`)]
+      };
+
+      db.batches.push(item);
+      imported.push(item);
+
+      writeAuditLog(db, {
+        actionType: '批量导入',
+        collection: 'batches',
+        targetId: item.id,
+        targetItem: item,
+        note: `批量导入批次，数量：${rowData.quantity || 0}${rowData.unit || '罐'}`,
+        operator: operator || '系统'
+      });
+    }
+
+    await writeDb(db);
+    res.json({
+      importedCount: imported.length,
+      failedCount: failed.length,
+      imported,
+      failed
+    });
+  } catch (err) {
+    res.status(500).json({ error: '导入失败：' + err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`${config.title} running at http://localhost:${PORT}`);
 });

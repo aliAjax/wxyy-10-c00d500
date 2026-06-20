@@ -335,6 +335,50 @@
           "note": "入库20发"
         }
       ]
+    },
+    {
+      "id": "batches-1781953239057-231f6",
+      "name": "测试药剂1",
+      "category": "冷焰火",
+      "batchNo": "IMPORT-TEST-001",
+      "supplierId": "supplier-seed-1",
+      "cabinetId": "cabinet-seed-1",
+      "safetyLevel": "高",
+      "quantity": 100,
+      "unit": "罐",
+      "expiresAt": "2027-12-31",
+      "status": "可用",
+      "createdAt": "2026-06-20T11:00:39.057Z",
+      "updatedAt": "2026-06-20T11:00:39.057Z",
+      "history": [
+        {
+          "at": "2026-06-20T11:00:39.057Z",
+          "action": "批量导入",
+          "note": "导入100罐，操作员：测试员"
+        }
+      ]
+    },
+    {
+      "id": "batches-1781953239057-7dff8",
+      "name": "测试药剂2",
+      "category": "喷射类",
+      "batchNo": "IMPORT-TEST-002",
+      "supplierId": "supplier-seed-1",
+      "cabinetId": "cabinet-seed-2",
+      "safetyLevel": "中",
+      "quantity": 50,
+      "unit": "箱",
+      "expiresAt": "2028-06-30",
+      "status": "可用",
+      "createdAt": "2026-06-20T11:00:39.057Z",
+      "updatedAt": "2026-06-20T11:00:39.057Z",
+      "history": [
+        {
+          "at": "2026-06-20T11:00:39.057Z",
+          "action": "批量导入",
+          "note": "导入50箱，操作员：测试员"
+        }
+      ]
     }
   ],
   "requests": [
@@ -685,6 +729,126 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1781953239057-a361d",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1781953239057-7dff8",
+      "targetLabel": "测试药剂2 / IMPORT-TEST-002",
+      "changes": {
+        "id": {
+          "after": "batches-1781953239057-7dff8"
+        },
+        "name": {
+          "after": "测试药剂2"
+        },
+        "category": {
+          "after": "喷射类"
+        },
+        "batchNo": {
+          "after": "IMPORT-TEST-002"
+        },
+        "supplierId": {
+          "after": "supplier-seed-1"
+        },
+        "cabinetId": {
+          "after": "cabinet-seed-2"
+        },
+        "safetyLevel": {
+          "after": "中"
+        },
+        "quantity": {
+          "after": 50
+        },
+        "unit": {
+          "after": "箱"
+        },
+        "expiresAt": {
+          "after": "2028-06-30"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-20T11:00:39.057Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T11:00:39.057Z"
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T11:00:39.057Z",
+              "action": "批量导入",
+              "note": "导入50箱，操作员：测试员"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：50箱",
+      "operator": "测试员",
+      "createdAt": "2026-06-20T11:00:39.057Z"
+    },
+    {
+      "id": "auditLogs-1781953239057-78980",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1781953239057-231f6",
+      "targetLabel": "测试药剂1 / IMPORT-TEST-001",
+      "changes": {
+        "id": {
+          "after": "batches-1781953239057-231f6"
+        },
+        "name": {
+          "after": "测试药剂1"
+        },
+        "category": {
+          "after": "冷焰火"
+        },
+        "batchNo": {
+          "after": "IMPORT-TEST-001"
+        },
+        "supplierId": {
+          "after": "supplier-seed-1"
+        },
+        "cabinetId": {
+          "after": "cabinet-seed-1"
+        },
+        "safetyLevel": {
+          "after": "高"
+        },
+        "quantity": {
+          "after": 100
+        },
+        "unit": {
+          "after": "罐"
+        },
+        "expiresAt": {
+          "after": "2027-12-31"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-20T11:00:39.057Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-20T11:00:39.057Z"
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-20T11:00:39.057Z",
+              "action": "批量导入",
+              "note": "导入100罐，操作员：测试员"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：100罐",
+      "operator": "测试员",
+      "createdAt": "2026-06-20T11:00:39.057Z"
+    },
     {
       "id": "auditLogs-1781950708118-90acf",
       "actionType": "出库(关联)",

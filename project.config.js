@@ -240,6 +240,12 @@ module.exports = {
       ]
     },
     {
+      id: 'batch-import',
+      label: '批量导入',
+      type: 'batch-import',
+      collection: 'batches'
+    },
+    {
       id: 'stocktakes',
       label: '库存盘点',
       type: 'stocktake',

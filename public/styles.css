@@ -965,3 +965,233 @@ main {
     grid-template-columns: 1fr;
   }
 }
+
+/* 批量导入模块样式 */
+.import-input-area {
+  margin-top: 16px;
+}
+
+.import-input-area textarea {
+  min-height: 200px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.import-hint {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.import-hint details {
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.import-hint summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.sample-csv {
+  margin: 10px 0 0;
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--muted);
+}
+
+.import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.import-stat {
+  background: var(--panel-2);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.import-stat-label {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.import-stat strong {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.import-stat-total strong {
+  color: var(--accent);
+}
+
+.import-stat-valid strong {
+  color: var(--ok);
+}
+
+.import-stat-error strong {
+  color: var(--bad);
+}
+
+.import-stat-dup strong {
+  color: var(--warn);
+}
+
+.import-error-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+
+.import-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-top: 16px;
+  background: #fff;
+}
+
+.import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  min-width: 700px;
+}
+
+.import-table th,
+.import-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.import-table th {
+  background: var(--panel-2);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.import-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.import-table .col-idx {
+  width: 60px;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 13px;
+  text-align: center;
+}
+
+.import-table .col-status {
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.import-row-valid {
+  background: rgba(38, 115, 77, 0.06);
+}
+
+.import-row-error {
+  background: rgba(161, 61, 61, 0.08);
+}
+
+.import-row-error td {
+  color: var(--bad);
+}
+
+.import-errors {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.import-errors .pill {
+  display: inline-block;
+  width: fit-content;
+}
+
+.import-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+
+@media (max-width: 980px) {
+  .import-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .import-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .import-stat {
+    padding: 10px 12px;
+  }
+
+  .import-stat strong {
+    font-size: 22px;
+  }
+
+  .import-stat-label {
+    font-size: 12px;
+  }
+
+  .import-table {
+    font-size: 13px;
+  }
+
+  .import-table th,
+  .import-table td {
+    padding: 8px 10px;
+  }
+
+  .import-actions {
+    flex-direction: column;
+  }
+
+  .import-actions button {
+    width: 100%;
+  }
+
+  .import-error-summary {
+    padding: 10px 12px;
+  }
+
+  .import-error-summary .pill {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+}

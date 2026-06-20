@@ -7,7 +7,8 @@ const state = {
   expandedWaste: null,
   wasteEdits: {},
   highlightRequestId: null,
-  preselectedBatchId: null
+  preselectedBatchId: null,
+  importPreview: null
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -902,6 +903,123 @@ function renderAuditLogsView(view) {
   </section>`;
 }
 
+function renderBatchImportView(view) {
+  const preview = state.importPreview;
+  const hasPreview = preview && preview.totalRows > 0;
+
+  const sampleCsv = `药剂名称,品类,批次号,供应商,存放柜位,安全等级,库存数量,单位,有效期,状态
+冷焰火粉A17,冷焰火,PY-A17-2606,星焰化工,防爆柜B-2,高,20,罐,2027-05-30,可用
+高空喷射礼花B03,喷射类,SP-B03-2606,星焰化工,防爆柜C-1,中,15,箱,2027-03-15,可用`;
+
+  let summaryHtml = '';
+  let tableHtml = '';
+
+  if (hasPreview) {
+    summaryHtml = `
+      <div class="import-summary">
+        <div class="import-stat import-stat-total">
+          <span class="import-stat-label">解析总行数</span>
+          <strong>${preview.totalRows}</strong>
+        </div>
+        <div class="import-stat import-stat-valid">
+          <span class="import-stat-label">有效行</span>
+          <strong>${preview.validCount}</strong>
+        </div>
+        <div class="import-stat import-stat-error">
+          <span class="import-stat-label">错误行</span>
+          <strong>${preview.errorCount}</strong>
+        </div>
+        <div class="import-stat import-stat-dup">
+          <span class="import-stat-label">重复批次号</span>
+          <strong>${preview.duplicateBatchNos.length}</strong>
+        </div>
+      </div>
+      <div class="import-error-summary">
+        ${preview.missingCount > 0 ? `<span class="pill bad">缺失必填项：${preview.missingCount} 行</span>` : ''}
+        ${preview.quantityErrorCount > 0 ? `<span class="pill bad">数量格式错误：${preview.quantityErrorCount} 行</span>` : ''}
+        ${preview.duplicateBatchNos.length > 0 ? `<span class="pill warn">重复批次号：${preview.duplicateBatchNos.slice(0, 5).join('、')}${preview.duplicateBatchNos.length > 5 ? '...' : ''}</span>` : ''}
+      </div>
+    `;
+
+    const allRows = [
+      ...(preview.validRows || []).map((r) => ({ ...r, rowType: 'valid' })),
+      ...(preview.errorRows || []).map((r) => ({ ...r, rowType: 'error' }))
+    ].sort((a, b) => a.rowIndex - b.rowIndex);
+
+    const displayFields = [
+      { key: 'name', label: '药剂名称' },
+      { key: 'category', label: '品类' },
+      { key: 'batchNo', label: '批次号' },
+      { key: 'quantity', label: '数量' },
+      { key: 'unit', label: '单位' },
+      { key: 'expiresAt', label: '有效期' },
+      { key: 'status', label: '状态' }
+    ];
+
+    tableHtml = `
+      <div class="import-table-wrap">
+        <table class="import-table">
+          <thead>
+            <tr>
+              <th class="col-idx">行号</th>
+              ${displayFields.map((f) => `<th>${escapeHtml(f.label)}</th>`).join('')}
+              <th class="col-status">状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${allRows.map((row) => `
+              <tr class="import-row import-row-${row.rowType}">
+                <td class="col-idx">${row.rowIndex}</td>
+                ${displayFields.map((f) => `<td>${escapeHtml(row.data[f.key] || '-')}</td>`).join('')}
+                <td class="col-status">
+                  ${row.rowType === 'valid'
+                    ? '<span class="pill ok">有效</span>'
+                    : `<div class="import-errors">${row.errors.map((e) => `<span class="pill bad">${escapeHtml(e)}</span>`).join('')}</div>`
+                  }
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="import-actions">
+        <button class="secondary" data-import-reset>重新输入</button>
+        <button data-import-confirm ${preview.validCount === 0 ? 'disabled' : ''}>
+          确认导入 ${preview.validCount} 条
+        </button>
+      </div>
+    `;
+  }
+
+  return `<section class="view" id="${view.id}">
+    <div class="panel">
+      <h2>批量导入药剂批次</h2>
+      <p class="meta">粘贴 CSV 文本，支持中文表头。系统会先预览解析结果，确认无误后再写入。</p>
+      ${!hasPreview ? `
+      <div class="import-input-area">
+        <label>
+          CSV 内容
+          <textarea id="csv-input" placeholder="请粘贴 CSV 内容，第一行为表头&#10;示例表头：药剂名称,品类,批次号,供应商,存放柜位,安全等级,库存数量,单位,有效期,状态"></textarea>
+        </label>
+        <div class="import-hint">
+          <details>
+            <summary>查看示例 CSV 格式</summary>
+            <pre class="sample-csv">${escapeHtml(sampleCsv)}</pre>
+          </details>
+          <p class="meta">必填字段：药剂名称、品类、批次号、库存数量、单位、有效期</p>
+          <p class="meta">供应商和柜位请填写名称/编号，系统会自动匹配</p>
+        </div>
+        <div class="import-actions">
+          <button data-import-preview>解析预览</button>
+        </div>
+      </div>
+      ` : ''}
+      ${summaryHtml}
+      ${tableHtml}
+    </div>
+  </section>`;
+}
+
 function applyAutoFill(select) {
   const form = select.closest('form');
   if (!form) return;
@@ -931,6 +1049,7 @@ function render() {
     if (view.type === 'stocktake') return renderStocktakeView(view);
     if (view.type === 'waste') return renderWasteView(view);
     if (view.type === 'audit-logs') return renderAuditLogsView(view);
+    if (view.type === 'batch-import') return renderBatchImportView(view);
     return renderCrudView(view);
   }).join('');
   setTab(state.activeTab || state.config.views[0].id);
@@ -1053,8 +1172,74 @@ document.addEventListener('click', async (event) => {
   const closeModalBtn = event.target.closest('#close-modal');
   const jumpRequestBtn = event.target.closest('[data-jump-request]');
   const modal = event.target.closest('#request-modal');
+  const importPreviewBtn = event.target.closest('[data-import-preview]');
+  const importResetBtn = event.target.closest('[data-import-reset]');
+  const importConfirmBtn = event.target.closest('[data-import-confirm]');
 
   if (tab) setTab(tab.dataset.tab);
+
+  if (importPreviewBtn) {
+    const csvInput = $('#csv-input');
+    const csvText = csvInput?.value || '';
+    if (!csvText.trim()) {
+      toast('请输入 CSV 内容');
+      return;
+    }
+    try {
+      const result = await api('/api/batches/import-preview', {
+        method: 'POST',
+        body: JSON.stringify({ csvText })
+      });
+      state.importPreview = result;
+      const view = state.config.views.find((v) => v.id === 'batch-import');
+      if (view) {
+        const viewEl = $('#batch-import');
+        if (viewEl) viewEl.outerHTML = renderBatchImportView(view);
+      }
+      toast(`解析完成：${result.validCount} 条有效，${result.errorCount} 条错误`);
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
+
+  if (importResetBtn) {
+    state.importPreview = null;
+    const view = state.config.views.find((v) => v.id === 'batch-import');
+    if (view) {
+      const viewEl = $('#batch-import');
+      if (viewEl) viewEl.outerHTML = renderBatchImportView(view);
+    }
+    return;
+  }
+
+  if (importConfirmBtn) {
+    const preview = state.importPreview;
+    if (!preview || !preview.validRows?.length) {
+      toast('没有可导入的数据');
+      return;
+    }
+    const ok = confirm(`确认导入 ${preview.validCount} 条药剂批次？\n确认后将写入系统，不可撤销。`);
+    if (!ok) return;
+    try {
+      const rows = preview.validRows.map((r) => r.data);
+      const result = await api('/api/batches/import-confirm', {
+        method: 'POST',
+        body: JSON.stringify({ rows, operator: '系统' })
+      });
+      await load();
+      state.importPreview = null;
+      const view = state.config.views.find((v) => v.id === 'batch-import');
+      if (view) {
+        const viewEl = $('#batch-import');
+        if (viewEl) viewEl.outerHTML = renderBatchImportView(view);
+      }
+      toast(`导入成功：${result.importedCount} 条`);
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
 
   if (createWasteFromBatchBtn) {
     const batchId = createWasteFromBatchBtn.dataset.createWasteFromBatch;
