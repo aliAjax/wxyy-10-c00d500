@@ -722,10 +722,34 @@ function closeRequestModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+function resetViewFilters(viewId) {
+  const view = state.config.views.find((entry) => entry.id === viewId);
+  if (!view) return;
+
+  const searchInput = $(`#search-${viewId}`);
+  const statusInput = $(`#status-${viewId}`);
+  let changed = false;
+
+  if (searchInput?.value) {
+    searchInput.value = '';
+    changed = true;
+  }
+  if (statusInput?.value) {
+    statusInput.value = '';
+    changed = true;
+  }
+
+  if (changed) {
+    const listEl = $(`#list-${viewId}`);
+    if (listEl) listEl.innerHTML = renderList(view);
+  }
+}
+
 function jumpToRequest(requestId) {
   state.highlightRequestId = requestId;
   closeRequestModal();
   setTab('requests');
+  resetViewFilters('requests');
   setTimeout(() => {
     const card = document.querySelector(`#requests .card[data-id="${requestId}"]`);
     if (card) {
