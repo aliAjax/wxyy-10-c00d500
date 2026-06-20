@@ -74,6 +74,12 @@ textarea {
   outline-color: var(--accent);
 }
 
+input[readonly] {
+  background: var(--panel-2);
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
 textarea {
   min-height: 92px;
   resize: vertical;

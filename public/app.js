@@ -61,6 +61,14 @@ function relationLabel(relation, id) {
   return relation.labelFields.map((field) => item[field]).filter(Boolean).join(' / ');
 }
 
+function computedFieldValue(field, item) {
+  const sourceItems = state.db[field.source] || [];
+  const matched = sourceItems.filter((entry) => entry[field.matchField] === item.id);
+  if (field.compute === 'count') return matched.length;
+  if (field.compute === 'sum') return matched.reduce((sum, entry) => sum + Number(entry[field.sumField] || 0), 0);
+  return '-';
+}
+
 function optionList(items, labelFields) {
   return items.map((item) => {
     const label = labelFields.map((field) => item[field]).filter(Boolean).join(' / ');
@@ -71,6 +79,10 @@ function optionList(items, labelFields) {
 function formField(field) {
   const required = field.required ? 'required' : '';
   const value = field.default ? `value="${escapeHtml(field.default)}"` : '';
+  if (field.type === 'display') {
+    const dataAttr = field.autoFillSource ? `data-auto-fill-target="${field.name}"` : '';
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="text" name="${field.name}" ${dataAttr} ${required} readonly></label>`;
+  }
   if (field.type === 'textarea') {
     return `<label class="${field.wide ? 'wide' : ''}">${field.label}<textarea name="${field.name}" ${required}></textarea></label>`;
   }
@@ -79,7 +91,8 @@ function formField(field) {
   }
   if (field.type === 'relation') {
     const items = state.db[field.collection] || [];
-    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required}>${optionList(items, field.labelFields)}</select></label>`;
+    const autoFillAttr = field.autoFill ? `data-auto-fill='${JSON.stringify(field.autoFill)}' data-collection="${field.collection}"` : '';
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required} ${autoFillAttr}>${optionList(items, field.labelFields)}</select></label>`;
   }
   return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${required}></label>`;
 }
@@ -134,9 +147,16 @@ function renderCard(item, collection, view) {
   const statusValue = item[view.statusField];
   const relation = view.relation ? `<div class="meta">${escapeHtml(relationLabel(view.relation, item[view.relation.localKey]))}</div>` : '';
   const details = (view.detailFields || []).map((field) => {
-    const raw = item[field.name];
-    const value = field.type === 'relation' ? relationLabel(field, raw) : raw;
-    return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(value || '-')}</strong></div>`;
+    let value;
+    if (field.type === 'computed') {
+      value = computedFieldValue(field, item);
+    } else if (field.type === 'relation') {
+      value = relationLabel(field, item[field.name]);
+    } else {
+      value = item[field.name];
+    }
+    const displayValue = value === null || value === undefined || value === '' ? '-' : value;
+    return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
   }).join('');
   const summary = (view.summaryFields || []).map((field) => item[field]).filter(Boolean).join(' · ');
   const actions = state.config.actions
@@ -159,7 +179,17 @@ function renderList(view) {
   const status = $(`#status-${view.id}`)?.value || '';
   let items = [...(state.db[collection] || [])];
   if (query) {
-    items = items.filter((item) => view.searchFields.some((field) => String(item[field] || '').includes(query)));
+    const relationFields = (view.fields || []).filter((f) => f.type === 'relation');
+    items = items.filter((item) => view.searchFields.some((field) => {
+      const raw = String(item[field] || '');
+      if (raw.includes(query)) return true;
+      const relField = relationFields.find((f) => f.name === field);
+      if (relField) {
+        const label = relationLabel(relField, item[field]);
+        if (label.includes(query)) return true;
+      }
+      return false;
+    }));
   }
   if (status) {
     items = items.filter((item) => item[view.statusField] === status);
@@ -234,6 +264,24 @@ document.addEventListener('click', async (event) => {
 document.addEventListener('input', (event) => {
   const view = state.config.views.find((entry) => entry.id && (event.target.id === `search-${entry.id}` || event.target.id === `status-${entry.id}`));
   if (view) $(`#list-${view.id}`).innerHTML = renderList(view);
+});
+
+document.addEventListener('change', (event) => {
+  const select = event.target.closest('select[data-auto-fill]');
+  if (!select) return;
+  const form = select.closest('form');
+  if (!form) return;
+  const autoFillConfig = JSON.parse(select.dataset.autoFill);
+  const collection = select.dataset.collection;
+  const selectedId = select.value;
+  const selectedItem = state.db[collection]?.find((item) => item.id === selectedId);
+  if (!selectedItem) return;
+  autoFillConfig.forEach((mapping) => {
+    const targetField = form.querySelector(`[name="${mapping.to}"]`);
+    if (targetField) {
+      targetField.value = selectedItem[mapping.from] || '';
+    }
+  });
 });
 
 document.addEventListener('submit', async (event) => {

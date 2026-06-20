@@ -1,11 +1,81 @@
 {
+  "cabinets": [
+    {
+      "id": "cabinet-seed-1",
+      "code": "防爆柜B-2",
+      "area": "A区危险品库房",
+      "capacity": 50,
+      "manager": "张伟",
+      "status": "使用中",
+      "createdAt": "2026-05-10T08:00:00.000Z",
+      "updatedAt": "2026-05-10T08:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-05-10T08:00:00.000Z",
+          "action": "创建",
+          "note": "防爆柜建档"
+        }
+      ]
+    },
+    {
+      "id": "cabinet-seed-2",
+      "code": "防爆柜C-1",
+      "area": "B区中转暂存间",
+      "capacity": 30,
+      "manager": "李明",
+      "status": "空闲",
+      "createdAt": "2026-05-12T09:00:00.000Z",
+      "updatedAt": "2026-05-12T09:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-05-12T09:00:00.000Z",
+          "action": "创建",
+          "note": "防爆柜建档"
+        }
+      ]
+    },
+    {
+      "id": "cabinet-seed-3",
+      "code": "防爆柜A-3",
+      "area": "A区危险品库房",
+      "capacity": 40,
+      "manager": "王芳",
+      "status": "已满",
+      "createdAt": "2026-05-15T10:00:00.000Z",
+      "updatedAt": "2026-05-15T10:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-05-15T10:00:00.000Z",
+          "action": "创建",
+          "note": "防爆柜建档"
+        }
+      ]
+    },
+    {
+      "id": "cabinets-1781937880533-10ab4",
+      "code": "防爆柜D-1",
+      "area": "C区待检区",
+      "capacity": 35,
+      "manager": "刘强",
+      "status": "空闲",
+      "createdAt": "2026-06-20T06:44:40.533Z",
+      "updatedAt": "2026-06-20T06:44:40.533Z",
+      "history": [
+        {
+          "at": "2026-06-20T06:44:40.533Z",
+          "action": "创建",
+          "note": ""
+        }
+      ]
+    }
+  ],
   "batches": [
     {
       "id": "batch-seed-1",
       "name": "冷焰火粉A17",
       "category": "冷焰火",
       "batchNo": "PY-A17-2605",
-      "cabinet": "防爆柜B-2",
+      "cabinetId": "cabinet-seed-1",
       "safetyLevel": "高",
       "quantity": 18,
       "unit": "罐",
@@ -15,7 +85,11 @@
       "createdAt": "2026-06-16T09:00:00.000Z",
       "updatedAt": "2026-06-16T09:00:00.000Z",
       "history": [
-        { "at": "2026-06-16T09:00:00.000Z", "action": "创建", "note": "入库18罐" }
+        {
+          "at": "2026-06-16T09:00:00.000Z",
+          "action": "创建",
+          "note": "入库18罐"
+        }
       ]
     }
   ],
@@ -23,6 +97,7 @@
     {
       "id": "request-seed-1",
       "batchId": "batch-seed-1",
+      "projectId": "project-seed-1",
       "showName": "海港音乐节开场",
       "venue": "南岸露天剧场",
       "useWindow": "2026-07-11 19:30-19:45",
@@ -36,7 +111,75 @@
       "createdAt": "2026-06-18T12:00:00.000Z",
       "updatedAt": "2026-06-18T12:00:00.000Z",
       "history": [
-        { "at": "2026-06-18T12:00:00.000Z", "action": "创建", "note": "提交演出领用申请" }
+        {
+          "at": "2026-06-18T12:00:00.000Z",
+          "action": "创建",
+          "note": "提交演出领用申请"
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "project-seed-1",
+      "name": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "organizer": "海星文化传播",
+      "showDate": "2026-07-11",
+      "riskLevel": "高",
+      "manager": "周涛",
+      "status": "筹备中",
+      "createdAt": "2026-06-10T10:00:00.000Z",
+      "updatedAt": "2026-06-10T10:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-06-10T10:00:00.000Z",
+          "action": "创建",
+          "note": "演出项目建档"
+        }
+      ]
+    },
+    {
+      "id": "project-seed-2",
+      "name": "城市夏夜嘉年华",
+      "venue": "中央广场主舞台",
+      "organizer": "都市盛典传媒",
+      "showDate": "2026-08-15",
+      "riskLevel": "中",
+      "manager": "林小雨",
+      "status": "筹备中",
+      "createdAt": "2026-06-12T14:30:00.000Z",
+      "updatedAt": "2026-06-12T14:30:00.000Z",
+      "history": [
+        {
+          "at": "2026-06-12T14:30:00.000Z",
+          "action": "创建",
+          "note": "演出项目建档"
+        }
+      ]
+    },
+    {
+      "id": "project-seed-3",
+      "name": "新年跨年晚会",
+      "venue": "国际会展中心",
+      "organizer": "寰宇娱乐集团",
+      "showDate": "2026-12-31",
+      "riskLevel": "高",
+      "manager": "陈志远",
+      "status": "已完成",
+      "createdAt": "2026-05-20T09:00:00.000Z",
+      "updatedAt": "2026-06-01T16:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-06-01T16:00:00.000Z",
+          "action": "更新",
+          "note": "项目状态更新为已完成"
+        },
+        {
+          "at": "2026-05-20T09:00:00.000Z",
+          "action": "创建",
+          "note": "演出项目建档"
+        }
       ]
     }
   ],
