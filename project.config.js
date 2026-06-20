@@ -5,23 +5,29 @@ module.exports = {
   tones: {
     '可用': 'ok',
     '已回库': 'ok',
+    '合作中': 'ok',
     '锁定': 'warn',
     '待审批': 'warn',
     '已审批': 'warn',
     '已出库': 'warn',
+    '已暂停': 'warn',
     '已过期': 'bad',
     '已报废': 'bad',
-    '已驳回': 'bad'
+    '已驳回': 'bad',
+    '资质过期': 'bad'
   },
   collections: {
     batches: { label: '药剂批次' },
-    requests: { label: '领用申请' }
+    requests: { label: '领用申请' },
+    suppliers: { label: '供应商档案' }
   },
   stats: [
     { label: '药剂批次', collection: 'batches' },
     { label: '可用批次', collection: 'batches', filter: { field: 'status', value: '可用' } },
     { label: '待审批', collection: 'requests', filter: { field: 'status', value: '待审批' } },
-    { label: '已出库', collection: 'requests', filter: { field: 'status', value: '已出库' } }
+    { label: '已出库', collection: 'requests', filter: { field: 'status', value: '已出库' } },
+    { label: '供应商', collection: 'suppliers' },
+    { label: '合作中', collection: 'suppliers', filter: { field: 'status', value: '合作中' } }
   ],
   views: [
     {
@@ -47,12 +53,14 @@ module.exports = {
       detailFields: [
         { label: '安全等级', name: 'safetyLevel' },
         { label: '库存', name: 'quantity' },
-        { label: '有效期', name: 'expiresAt' }
+        { label: '有效期', name: 'expiresAt' },
+        { label: '供应商', name: 'supplierId', type: 'relation', collection: 'suppliers', labelFields: ['name'] }
       ],
       fields: [
         { label: '药剂名称', name: 'name', required: true },
         { label: '品类', name: 'category', required: true },
         { label: '批次号', name: 'batchNo', required: true },
+        { label: '供应商', name: 'supplierId', type: 'relation', collection: 'suppliers', labelFields: ['name'], required: true, wide: true },
         { label: '存放柜位', name: 'cabinet', required: true },
         { label: '安全等级', name: 'safetyLevel', type: 'select', options: ['低', '中', '高'] },
         { label: '库存数量', name: 'quantity', type: 'number', required: true },
@@ -91,6 +99,34 @@ module.exports = {
         { label: '所需安全等级', name: 'safetyLevel', type: 'select', options: ['低', '中', '高'] },
         { label: '安全备注', name: 'memo', type: 'textarea', wide: true }
       ]
+    },
+    {
+      id: 'suppliers',
+      label: '供应商档案',
+      collection: 'suppliers',
+      formTitle: '新增供应商',
+      listTitle: '供应商列表',
+      submitLabel: '保存供应商',
+      searchPlaceholder: '搜索名称、联系人、品类',
+      searchFields: ['name', 'contact', 'category'],
+      statusField: 'status',
+      statusOptions: ['合作中', '已暂停', '资质过期'],
+      titleFields: ['name'],
+      summaryFields: ['contact', 'category'],
+      detailFields: [
+        { label: '风险等级', name: 'riskLevel' },
+        { label: '资质到期', name: 'certExpiresAt' },
+        { label: '联系电话', name: 'phone' }
+      ],
+      fields: [
+        { label: '供应商名称', name: 'name', required: true },
+        { label: '联系人', name: 'contact', required: true },
+        { label: '联系电话', name: 'phone' },
+        { label: '供应品类', name: 'category', required: true },
+        { label: '风险等级', name: 'riskLevel', type: 'select', options: ['低', '中', '高'] },
+        { label: '资质到期日', name: 'certExpiresAt', type: 'date', required: true },
+        { label: '状态', name: 'status', type: 'select', options: ['合作中', '已暂停', '资质过期'], wide: true }
+      ]
     }
   ],
   actions: [
@@ -112,6 +148,9 @@ module.exports = {
       deltas: [{ target: 'related', field: 'quantity', amountPath: 'item.quantity', amount: -1 }]
     },
     { id: 'request-return', label: '回库闭环', collection: 'requests', patches: [{ field: 'status', value: '已回库' }, { field: 'returned', valuePath: 'item.quantity' }] },
-    { id: 'request-reject', label: '驳回', collection: 'requests', danger: true, patches: [{ field: 'status', value: '已驳回' }] }
+    { id: 'request-reject', label: '驳回', collection: 'requests', danger: true, patches: [{ field: 'status', value: '已驳回' }] },
+    { id: 'supplier-active', label: '合作中', collection: 'suppliers', patches: [{ field: 'status', value: '合作中' }] },
+    { id: 'supplier-pause', label: '暂停', collection: 'suppliers', patches: [{ field: 'status', value: '已暂停' }] },
+    { id: 'supplier-expired', label: '资质过期', collection: 'suppliers', danger: true, patches: [{ field: 'status', value: '资质过期' }] }
   ]
 };

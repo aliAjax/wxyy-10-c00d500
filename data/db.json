@@ -10,6 +10,7 @@
       "quantity": 18,
       "unit": "罐",
       "expiresAt": "2026-10-30",
+      "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-06-16T09:00:00.000Z",
       "updatedAt": "2026-06-16T09:00:00.000Z",
@@ -36,6 +37,27 @@
       "updatedAt": "2026-06-18T12:00:00.000Z",
       "history": [
         { "at": "2026-06-18T12:00:00.000Z", "action": "创建", "note": "提交演出领用申请" }
+      ]
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "supplier-seed-1",
+      "name": "华光烟火科技",
+      "contact": "陈铭",
+      "phone": "138-0013-8000",
+      "category": "冷焰火",
+      "riskLevel": "中",
+      "certExpiresAt": "2027-03-15",
+      "status": "合作中",
+      "createdAt": "2026-05-20T08:00:00.000Z",
+      "updatedAt": "2026-05-20T08:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-05-20T08:00:00.000Z",
+          "action": "创建",
+          "note": "建立供应商档案"
+        }
       ]
     }
   ]
