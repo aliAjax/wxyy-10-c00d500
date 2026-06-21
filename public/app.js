@@ -1461,6 +1461,70 @@ function renderAuditLogsView(view) {
   </section>`;
 }
 
+function renderPendingEditForm(row, type) {
+  const pendingData = row.pendingCreate[type];
+  if (!pendingData) return '';
+
+  const isSupplier = type === 'supplier';
+  const fields = isSupplier
+    ? [
+        { key: 'name', label: '供应商名称', required: true, readonly: true },
+        { key: 'contact', label: '联系人', required: true, type: 'text' },
+        { key: 'phone', label: '联系电话', required: false, type: 'text' },
+        { key: 'category', label: '供应品类', required: true, type: 'text' },
+        { key: 'riskLevel', label: '风险等级', required: false, type: 'select', options: ['低', '中', '高'] },
+        { key: 'certExpiresAt', label: '资质到期日', required: true, type: 'date' }
+      ]
+    : [
+        { key: 'code', label: '柜位编号', required: true, readonly: true },
+        { key: 'area', label: '所在区域', required: true, type: 'text' },
+        { key: 'capacity', label: '容量上限', required: true, type: 'number' },
+        { key: 'manager', label: '负责人', required: true, type: 'text' },
+        { key: 'status', label: '状态', required: false, type: 'select', options: ['空闲', '使用中', '已满', '停用'] }
+      ];
+
+  const requiredMissing = fields.filter(f => f.required && !pendingData[f.key]).length;
+  const statusClass = requiredMissing > 0 ? 'pending-incomplete' : 'pending-complete';
+
+  return `
+    <div class="pending-edit-form ${statusClass}">
+      <div class="pending-edit-header">
+        <span class="pill pending">📝 待创建${isSupplier ? '供应商' : '柜位'}：${escapeHtml(isSupplier ? pendingData.name : pendingData.code)}</span>
+        ${requiredMissing > 0 
+          ? `<span class="pill bad">⚠ 缺少 ${requiredMissing} 个必填字段</span>`
+          : `<span class="pill ok">✓ 字段完整</span>`}
+      </div>
+      <form class="pending-edit-grid" data-pending-form="${type}-${row.rowIndex}">
+        ${fields.map(f => {
+          const name = `${type}_${row.rowIndex}_${f.key}`;
+          const value = pendingData[f.key] || '';
+          const required = f.required ? 'required' : '';
+          const readonly = f.readonly ? 'readonly' : '';
+          if (f.type === 'select') {
+            return `
+              <label>
+                ${escapeHtml(f.label)}${f.required ? ' *' : ''}
+                <select name="${name}" ${required} ${readonly ? 'disabled' : ''}>
+                  ${f.options.map(opt => `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                </select>
+              </label>
+            `;
+          }
+          return `
+            <label>
+              ${escapeHtml(f.label)}${f.required ? ' *' : ''}
+              <input type="${f.type || 'text'}" name="${name}" value="${escapeHtml(value)}" ${required} ${readonly}>
+            </label>
+          `;
+        }).join('')}
+        <div class="pending-edit-actions">
+          <button type="button" class="ghost" data-pending-edit="${row.rowIndex}" data-pending-type="${type}">保存字段</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
 function renderBatchImportView(view) {
   const canImport = canCurrentUser('special', 'batches-import');
   const preview = state.importPreview;
@@ -1473,6 +1537,7 @@ function renderBatchImportView(view) {
   let summaryHtml = '';
   let tableHtml = '';
   let inputArea = '';
+  let pendingFormsHtml = '';
 
   if (!canImport) {
     inputArea = `
@@ -1493,7 +1558,7 @@ function renderBatchImportView(view) {
             <pre class="sample-csv">${escapeHtml(sampleCsv)}</pre>
           </details>
           <p class="meta">必填字段：药剂名称、品类、批次号、供应商、存放柜位、库存数量、单位、有效期</p>
-          <p class="meta">供应商和柜位请填写名称/编号，系统会自动匹配</p>
+          <p class="meta">供应商和柜位如不存在，系统将标记为「待创建」，请在预览中补齐必填字段后再导入</p>
         </div>
         <div class="import-actions">
           <button data-import-preview>解析预览</button>
@@ -1503,6 +1568,8 @@ function renderBatchImportView(view) {
   }
 
   if (hasPreview) {
+    const totalImportable = (preview.validCount || 0) + (preview.pendingCount || 0);
+
     summaryHtml = `
       <div class="import-summary">
         <div class="import-stat import-stat-total">
@@ -1511,26 +1578,29 @@ function renderBatchImportView(view) {
         </div>
         <div class="import-stat import-stat-valid">
           <span class="import-stat-label">有效行</span>
-          <strong>${preview.validCount}</strong>
+          <strong>${preview.validCount || 0}</strong>
+        </div>
+        <div class="import-stat import-stat-pending">
+          <span class="import-stat-label">待创建</span>
+          <strong>${preview.pendingCount || 0}</strong>
         </div>
         <div class="import-stat import-stat-error">
           <span class="import-stat-label">错误行</span>
-          <strong>${preview.errorCount}</strong>
-        </div>
-        <div class="import-stat import-stat-dup">
-          <span class="import-stat-label">重复批次号</span>
-          <strong>${preview.duplicateBatchNos.length}</strong>
+          <strong>${preview.errorCount || 0}</strong>
         </div>
       </div>
       <div class="import-error-summary">
         ${preview.missingCount > 0 ? `<span class="pill bad">缺失必填项：${preview.missingCount} 行</span>` : ''}
         ${preview.quantityErrorCount > 0 ? `<span class="pill bad">数量格式错误：${preview.quantityErrorCount} 行</span>` : ''}
         ${preview.duplicateBatchNos.length > 0 ? `<span class="pill warn">重复批次号：${preview.duplicateBatchNos.slice(0, 5).join('、')}${preview.duplicateBatchNos.length > 5 ? '...' : ''}</span>` : ''}
+        ${preview.pendingSupplierNames?.length > 0 ? `<span class="pill pending">待创建供应商：${preview.pendingSupplierNames.slice(0, 5).join('、')}${preview.pendingSupplierNames.length > 5 ? '...' : ''}</span>` : ''}
+        ${preview.pendingCabinetCodes?.length > 0 ? `<span class="pill pending">待创建柜位：${preview.pendingCabinetCodes.slice(0, 5).join('、')}${preview.pendingCabinetCodes.length > 5 ? '...' : ''}</span>` : ''}
       </div>
     `;
 
     const allRows = [
       ...(preview.validRows || []).map((r) => ({ ...r, rowType: 'valid' })),
+      ...(preview.pendingRows || []).map((r) => ({ ...r, rowType: 'pending' })),
       ...(preview.errorRows || []).map((r) => ({ ...r, rowType: 'error' }))
     ].sort((a, b) => a.rowIndex - b.rowIndex);
 
@@ -1555,24 +1625,71 @@ function renderBatchImportView(view) {
             </tr>
           </thead>
           <tbody>
-            ${allRows.map((row) => `
-              <tr class="import-row import-row-${row.rowType}">
-                <td class="col-idx">${row.rowIndex}</td>
-                ${displayFields.map((f) => `<td>${escapeHtml(row.data[f.key] || '-')}</td>`).join('')}
-                <td class="col-status">
-                  ${row.rowType === 'valid'
-                    ? '<span class="pill ok">有效</span>'
-                    : `<div class="import-errors">${row.errors.map((e) => `<span class="pill bad">${escapeHtml(e)}</span>`).join('')}</div>`}
-                </td>
-              </tr>
-            `).join('')}
+            ${allRows.map((row) => {
+              let statusHtml = '';
+              if (row.rowType === 'valid') {
+                statusHtml = '<span class="pill ok">✓ 有效</span>';
+              } else if (row.rowType === 'pending') {
+                const pendingInfo = [];
+                if (row.pendingCreate?.supplier) {
+                  pendingInfo.push(`供应商「${row.supplierName}」待创建`);
+                }
+                if (row.pendingCreate?.cabinet) {
+                  pendingInfo.push(`柜位「${row.cabinetName}」待创建`);
+                }
+                statusHtml = `<div class="import-errors">
+                  <span class="pill pending">⏳ 待创建</span>
+                  ${pendingInfo.map(info => `<span class="pill pending-sm">${escapeHtml(info)}</span>`).join('')}
+                </div>`;
+              } else {
+                statusHtml = `<div class="import-errors">${row.errors.map((e) => `<span class="pill bad">${escapeHtml(e)}</span>`).join('')}</div>`;
+              }
+              return `
+                <tr class="import-row import-row-${row.rowType}">
+                  <td class="col-idx">${row.rowIndex}</td>
+                  ${displayFields.map((f) => `<td>${escapeHtml(row.data[f.key] || '-')}</td>`).join('')}
+                  <td class="col-status">${statusHtml}</td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
         </table>
       </div>
+    `;
+
+    if (preview.pendingRows && preview.pendingRows.length > 0) {
+      pendingFormsHtml = `
+        <div class="pending-forms-section">
+          <h3 style="margin-top:20px;margin-bottom:12px;font-size:16px;">📝 待创建记录 - 请补齐必填字段</h3>
+          <div class="pending-forms-grid">
+            ${preview.pendingRows.map(row => `
+              ${row.pendingCreate?.supplier ? renderPendingEditForm(row, 'supplier') : ''}
+              ${row.pendingCreate?.cabinet ? renderPendingEditForm(row, 'cabinet') : ''}
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    const canConfirm = totalImportable > 0 && (preview.pendingCount || 0) === (preview.pendingRows || []).filter(row => {
+      let complete = true;
+      if (row.pendingCreate?.supplier) {
+        const s = row.pendingCreate.supplier;
+        complete = complete && s.contact && s.category && s.certExpiresAt;
+      }
+      if (row.pendingCreate?.cabinet) {
+        const c = row.pendingCreate.cabinet;
+        complete = complete && c.area && c.capacity && c.manager;
+      }
+      return complete;
+    }).length;
+
+    tableHtml += `
       <div class="import-actions">
         <button class="secondary" data-import-reset>重新输入</button>
-        <button data-import-confirm ${preview.validCount === 0 ? 'disabled' : ''}>
-          确认导入 ${preview.validCount} 条
+        <button data-import-confirm ${canConfirm ? '' : 'disabled'}>
+          确认导入 ${totalImportable} 条
+          ${preview.pendingCount > 0 ? `（含待创建 ${preview.pendingCount} 条）` : ''}
         </button>
       </div>
     `;
@@ -1581,10 +1698,11 @@ function renderBatchImportView(view) {
   return `<section class="view" id="${view.id}">
     <div class="panel">
       <h2>批量导入药剂批次</h2>
-      <p class="meta">粘贴 CSV 文本，支持中文表头。系统会先预览解析结果，确认无误后再写入。</p>
+      <p class="meta">粘贴 CSV 文本，支持中文表头。系统会先预览解析结果，供应商或柜位不存在时将标记为「待创建」，请补齐字段后再导入。</p>
       ${inputArea}
       ${summaryHtml}
       ${tableHtml}
+      ${pendingFormsHtml}
     </div>
   </section>`;
 }
@@ -2480,12 +2598,15 @@ document.addEventListener('click', async (e) => {
     const textarea = document.getElementById('csv-input');
     const raw = textarea ? textarea.value : '';
     try {
-      const parsed = parseImportText(raw);
-      state.importPreview = parsed;
+      const preview = await api('/api/batches/import-preview', {
+        method: 'POST',
+        body: JSON.stringify({ csvText: raw })
+      });
+      state.importPreview = preview;
       render();
     } catch (err) {
-        toast('解析失败：' + err.message);
-      }
+      toast('解析失败：' + err.message);
+    }
     return;
   }
 
@@ -2496,22 +2617,79 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  const pendingEdit = e.target.closest('[data-pending-edit]');
+  if (pendingEdit) {
+    e.preventDefault();
+    const rowIndex = Number(pendingEdit.dataset.pendingEdit);
+    const type = pendingEdit.dataset.pendingType;
+    const row = state.importPreview.pendingRows?.find(r => r.rowIndex === rowIndex);
+    if (!row) return;
+    const pendingData = row.pendingCreate[type];
+    if (!pendingData) return;
+    const form = e.target.closest('form');
+    if (!form) return;
+    const formData = new FormData(form);
+    for (const [key, value] of formData.entries()) {
+      if (key.startsWith(`${type}_${rowIndex}_`)) {
+        const field = key.replace(`${type}_${rowIndex}_`, '');
+        pendingData[field] = value;
+      }
+    }
+    render();
+    return;
+  }
+
   const importConfirm = e.target.closest('[data-import-confirm]');
   if (importConfirm) {
     e.preventDefault();
-    if (!state.importPreview || state.importPreview.length === 0) {
+    const preview = state.importPreview;
+    if (!preview || (preview.validCount === 0 && preview.pendingCount === 0)) {
       toast('没有可导入的数据');
       return;
-      }
-    const results = [];
-    for (const row of state.importPreview) {
-      const ok = await api('/api/batches', { method: 'POST', body: JSON.stringify(row) });
-      results.push(ok);
     }
-    toast(`成功导入 ${results.filter(r => r).length} 条`);
-    state.importPreview = null;
-    await loadDb();
-    render();
+
+    const importableRows = [
+      ...(preview.validRows || []),
+      ...(preview.pendingRows || [])
+    ];
+
+    const pendingErrors = [];
+    preview.pendingRows?.forEach(row => {
+      if (row.pendingCreate.supplier) {
+        const s = row.pendingCreate.supplier;
+        if (!s.contact || !s.category || !s.certExpiresAt) {
+          pendingErrors.push(`第${row.rowIndex}行：供应商「${s.name}」缺少必填字段`);
+        }
+      }
+      if (row.pendingCreate.cabinet) {
+        const c = row.pendingCreate.cabinet;
+        if (!c.area || !c.capacity || !c.manager) {
+          pendingErrors.push(`第${row.rowIndex}行：柜位「${c.code}」缺少必填字段`);
+        }
+      }
+    });
+
+    if (pendingErrors.length > 0) {
+      alert('请先补齐待创建记录的必填字段：\n' + pendingErrors.join('\n'));
+      return;
+    }
+
+    try {
+      const result = await api('/api/batches/import-confirm', {
+        method: 'POST',
+        body: JSON.stringify({ rows: importableRows })
+      });
+      let msg = `成功导入 ${result.importedCount} 条批次`;
+      if (result.createdSuppliersCount > 0) msg += `，创建供应商 ${result.createdSuppliersCount} 个`;
+      if (result.createdCabinetsCount > 0) msg += `，创建柜位 ${result.createdCabinetsCount} 个`;
+      if (result.failedCount > 0) msg += `，失败 ${result.failedCount} 条`;
+      toast(msg);
+      state.importPreview = null;
+      await loadDb();
+      render();
+    } catch (err) {
+      toast('导入失败：' + err.message);
+    }
     return;
   }
 

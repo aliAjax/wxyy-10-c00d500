@@ -1098,6 +1098,25 @@ const BATCH_FIELD_LABELS = {
   status: '状态'
 };
 
+const SUPPLIER_REQUIRED_FIELDS = ['name', 'contact', 'category', 'certExpiresAt'];
+const SUPPLIER_FIELD_LABELS = {
+  name: '供应商名称',
+  contact: '联系人',
+  phone: '联系电话',
+  category: '供应品类',
+  riskLevel: '风险等级',
+  certExpiresAt: '资质到期日'
+};
+
+const CABINET_REQUIRED_FIELDS = ['code', 'area', 'capacity', 'manager'];
+const CABINET_FIELD_LABELS = {
+  code: '防爆柜编号',
+  area: '所在区域',
+  capacity: '容量上限',
+  manager: '负责人',
+  status: '状态'
+};
+
 function normalizeHeader(header) {
   const map = {
     '药剂名称': 'name',
@@ -1133,6 +1152,10 @@ function validateBatchRow(row, headers, db, rowIndex) {
   const errors = [];
   const data = {};
   const missing = [];
+  const pendingCreate = {
+    supplier: null,
+    cabinet: null
+  };
 
   headers.forEach((header, idx) => {
     const field = normalizeHeader(header);
@@ -1168,7 +1191,15 @@ function validateBatchRow(row, headers, db, rowIndex) {
     if (supplier) {
       supplierId = supplier.id;
     } else {
-      errors.push(`供应商「${data.supplier}」不存在`);
+      pendingCreate.supplier = {
+        name: data.supplier,
+        contact: '',
+        phone: '',
+        category: data.category || '',
+        riskLevel: '低',
+        certExpiresAt: '',
+        status: '合作中'
+      };
     }
   }
 
@@ -1178,7 +1209,13 @@ function validateBatchRow(row, headers, db, rowIndex) {
     if (cabinet) {
       cabinetId = cabinet.id;
     } else {
-      errors.push(`柜位「${data.cabinet}」不存在`);
+      pendingCreate.cabinet = {
+        code: data.cabinet,
+        area: '',
+        capacity: 0,
+        manager: '',
+        status: '使用中'
+      };
     }
   }
 
@@ -1195,12 +1232,20 @@ function validateBatchRow(row, headers, db, rowIndex) {
     status: data.status || '可用'
   };
 
+  let rowType = 'valid';
+  if (errors.length > 0) {
+    rowType = 'error';
+  } else if (pendingCreate.supplier || pendingCreate.cabinet) {
+    rowType = 'pending';
+  }
+
   let capacityError = null;
-  if (batchData.cabinetId && batchData.quantity > 0 && errors.length === 0) {
+  if (batchData.cabinetId && batchData.quantity > 0 && rowType === 'valid') {
     const capCheck = checkCabinetCapacity(db, batchData.cabinetId, batchData.quantity);
     if (!capCheck.ok) {
       capacityError = capCheck.error;
       errors.push(capacityError);
+      rowType = 'error';
     }
   }
 
@@ -1209,7 +1254,13 @@ function validateBatchRow(row, headers, db, rowIndex) {
     data: batchData,
     raw: row,
     errors,
-    isValid: errors.length === 0
+    rowType,
+    isValid: rowType === 'valid',
+    isPending: rowType === 'pending',
+    isError: rowType === 'error',
+    pendingCreate,
+    supplierName: data.supplier || '',
+    cabinetName: data.cabinet || ''
   };
 }
 
@@ -1233,9 +1284,11 @@ app.post('/api/batches/import-preview', requireUser, async (req, res) => {
     const results = rows.map((row, idx) => validateBatchRow(row, headers, db, idx + 2));
 
     const validRows = results.filter((r) => r.isValid);
-    const errorRows = results.filter((r) => !r.isValid);
+    const pendingRows = results.filter((r) => r.isPending);
+    const errorRows = results.filter((r) => r.isError);
 
-    const batchNos = validRows.map((r) => r.data.batchNo).filter(Boolean);
+    const allRowsForDupCheck = [...validRows, ...pendingRows];
+    const batchNos = allRowsForDupCheck.map((r) => r.data.batchNo).filter(Boolean);
     const duplicateInCsv = [];
     const seen = new Set();
     for (const no of batchNos) {
@@ -1254,18 +1307,22 @@ app.post('/api/batches/import-preview', requireUser, async (req, res) => {
 
     const allDuplicates = [...new Set([...duplicateInCsv, ...duplicateInDb])];
 
-    validRows.forEach((r) => {
+    allRowsForDupCheck.forEach((r) => {
       if (allDuplicates.includes(r.data.batchNo)) {
-        r.isValid = false;
         const dupType = [];
         if (duplicateInCsv.includes(r.data.batchNo)) dupType.push('CSV内重复');
         if (duplicateInDb.includes(r.data.batchNo)) dupType.push('系统已存在');
         r.errors.push(`批次号重复（${dupType.join('、')}）`);
+        r.rowType = 'error';
+        r.isValid = false;
+        r.isPending = false;
+        r.isError = true;
       }
     });
 
     const finalValidRows = results.filter((r) => r.isValid);
-    const finalErrorRows = results.filter((r) => !r.isValid);
+    const finalPendingRows = results.filter((r) => r.isPending);
+    const finalErrorRows = results.filter((r) => r.isError);
 
     const missingCount = finalErrorRows.filter((r) =>
       r.errors.some((e) => e.includes('缺失必填项'))
@@ -1274,22 +1331,129 @@ app.post('/api/batches/import-preview', requireUser, async (req, res) => {
       r.errors.some((e) => e.includes('数量格式错误'))
     ).length;
 
+    const pendingSupplierNames = [...new Set(finalPendingRows.filter(r => r.pendingCreate.supplier).map(r => r.supplierName))];
+    const pendingCabinetCodes = [...new Set(finalPendingRows.filter(r => r.pendingCreate.cabinet).map(r => r.cabinetName))];
+
     res.json({
       headers: normalizedHeaders,
       rawHeaders: headers,
       totalRows: rows.length,
       validCount: finalValidRows.length,
+      pendingCount: finalPendingRows.length,
       errorCount: finalErrorRows.length,
       duplicateBatchNos: allDuplicates,
       missingCount,
       quantityErrorCount,
+      pendingSupplierNames,
+      pendingCabinetCodes,
       validRows: finalValidRows,
+      pendingRows: finalPendingRows,
       errorRows: finalErrorRows
     });
   } catch (err) {
     res.status(500).json({ error: '解析失败：' + err.message });
   }
 });
+
+function createSupplierFromImport(db, supplierData, operator, now) {
+  const supplier = {
+    id: `suppliers-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    name: supplierData.name,
+    contact: supplierData.contact || '',
+    phone: supplierData.phone || '',
+    category: supplierData.category || '',
+    riskLevel: supplierData.riskLevel || '低',
+    certExpiresAt: supplierData.certExpiresAt || '',
+    status: supplierData.status || '合作中',
+    createdAt: now,
+    updatedAt: now,
+    createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+    history: [stamp('批量导入创建', `供应商「${supplierData.name}」由批量导入自动创建`, operator)]
+  };
+
+  if (!db.suppliers) db.suppliers = [];
+  db.suppliers.push(supplier);
+
+  writeAuditLog(db, {
+    actionType: '批量导入创建',
+    collection: 'suppliers',
+    targetId: supplier.id,
+    targetItem: supplier,
+    note: `批量导入自动创建供应商：${supplierData.name}`,
+    operator
+  });
+
+  return supplier;
+}
+
+function createCabinetFromImport(db, cabinetData, operator, now) {
+  const cabinet = {
+    id: `cabinets-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    code: cabinetData.code,
+    area: cabinetData.area || '',
+    capacity: Number(cabinetData.capacity || 0),
+    manager: cabinetData.manager || '',
+    status: cabinetData.status || '使用中',
+    createdAt: now,
+    updatedAt: now,
+    createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+    history: [stamp('批量导入创建', `柜位「${cabinetData.code}」由批量导入自动创建`, operator)]
+  };
+
+  if (!db.cabinets) db.cabinets = [];
+  db.cabinets.push(cabinet);
+
+  writeAuditLog(db, {
+    actionType: '批量导入创建',
+    collection: 'cabinets',
+    targetId: cabinet.id,
+    targetItem: cabinet,
+    note: `批量导入自动创建柜位：${cabinetData.code}`,
+    operator
+  });
+
+  return cabinet;
+}
+
+function validatePendingSupplier(supplierData) {
+  const errors = [];
+  if (!supplierData.name || String(supplierData.name).trim() === '') {
+    errors.push('供应商名称不能为空');
+  }
+  if (!supplierData.contact || String(supplierData.contact).trim() === '') {
+    errors.push('联系人不能为空');
+  }
+  if (!supplierData.category || String(supplierData.category).trim() === '') {
+    errors.push('供应品类不能为空');
+  }
+  if (!supplierData.certExpiresAt || String(supplierData.certExpiresAt).trim() === '') {
+    errors.push('资质到期日不能为空');
+  } else {
+    const date = new Date(supplierData.certExpiresAt);
+    if (isNaN(date.getTime())) {
+      errors.push('资质到期日格式错误');
+    }
+  }
+  return errors;
+}
+
+function validatePendingCabinet(cabinetData) {
+  const errors = [];
+  if (!cabinetData.code || String(cabinetData.code).trim() === '') {
+    errors.push('柜位编号不能为空');
+  }
+  if (!cabinetData.area || String(cabinetData.area).trim() === '') {
+    errors.push('所在区域不能为空');
+  }
+  const capacity = Number(cabinetData.capacity || 0);
+  if (isNaN(capacity) || capacity <= 0) {
+    errors.push('容量上限必须大于0');
+  }
+  if (!cabinetData.manager || String(cabinetData.manager).trim() === '') {
+    errors.push('负责人不能为空');
+  }
+  return errors;
+}
 
 app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
   if (!checkPermission(req.currentUser, 'special', 'batches-import', res)) return;
@@ -1304,16 +1468,75 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
     const db = await readDb();
     const now = new Date().toISOString();
     const imported = [];
+    const createdSuppliers = [];
+    const createdCabinets = [];
     const failed = [];
 
-    for (const rowData of rows) {
+    const supplierNameToId = {};
+    const cabinetCodeToId = {};
+    (db.suppliers || []).forEach(s => { supplierNameToId[s.name] = s.id; });
+    (db.cabinets || []).forEach(c => { cabinetCodeToId[c.code] = c.id; });
+
+    for (const row of rows) {
+      const rowData = row.data || row;
+      const pendingCreate = row.pendingCreate || {};
       const batchNo = rowData.batchNo;
-      if (db.batches.some((b) => b.batchNo === batchNo)) {
+      const rowErrors = [];
+
+      if (db.batches.some((b) => b.batchNo === batchNo) || imported.some(b => b.batchNo === batchNo)) {
         failed.push({ batchNo, error: '批次号已存在' });
         continue;
       }
 
-      const cabinetId = rowData.cabinetId;
+      let supplierId = rowData.supplierId || '';
+      if (pendingCreate.supplier && !supplierId) {
+        const supplierErrors = validatePendingSupplier(pendingCreate.supplier);
+        if (supplierErrors.length > 0) {
+          rowErrors.push(...supplierErrors.map(e => `供应商：${e}`));
+        } else {
+          const supplierName = pendingCreate.supplier.name;
+          if (supplierNameToId[supplierName]) {
+            supplierId = supplierNameToId[supplierName];
+          } else {
+            if (!supplierNameToId[supplierName] && !createdSuppliers.some(s => s.name === supplierName)) {
+              const newSupplier = createSupplierFromImport(db, pendingCreate.supplier, operator, now);
+              supplierId = newSupplier.id;
+              supplierNameToId[supplierName] = newSupplier.id;
+              createdSuppliers.push(newSupplier);
+            } else {
+              supplierId = supplierNameToId[supplierName] || createdSuppliers.find(s => s.name === supplierName)?.id || '';
+            }
+          }
+        }
+      }
+
+      let cabinetId = rowData.cabinetId || '';
+      if (pendingCreate.cabinet && !cabinetId) {
+        const cabinetErrors = validatePendingCabinet(pendingCreate.cabinet);
+        if (cabinetErrors.length > 0) {
+          rowErrors.push(...cabinetErrors.map(e => `柜位：${e}`));
+        } else {
+          const cabinetCode = pendingCreate.cabinet.code;
+          if (cabinetCodeToId[cabinetCode]) {
+            cabinetId = cabinetCodeToId[cabinetCode];
+          } else {
+            if (!cabinetCodeToId[cabinetCode] && !createdCabinets.some(c => c.code === cabinetCode)) {
+              const newCabinet = createCabinetFromImport(db, pendingCreate.cabinet, operator, now);
+              cabinetId = newCabinet.id;
+              cabinetCodeToId[cabinetCode] = newCabinet.id;
+              createdCabinets.push(newCabinet);
+            } else {
+              cabinetId = cabinetCodeToId[cabinetCode] || createdCabinets.find(c => c.code === cabinetCode)?.id || '';
+            }
+          }
+        }
+      }
+
+      if (rowErrors.length > 0) {
+        failed.push({ batchNo, errors: rowErrors });
+        continue;
+      }
+
       const addQty = Number(rowData.quantity || 0);
       if (cabinetId) {
         const capCheck = checkCabinetCapacity(db, cabinetId, addQty);
@@ -1328,17 +1551,17 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
         name: rowData.name,
         category: rowData.category,
         batchNo: rowData.batchNo,
-        supplierId: rowData.supplierId || '',
-        cabinetId: rowData.cabinetId || '',
+        supplierId: supplierId,
+        cabinetId: cabinetId,
         safetyLevel: rowData.safetyLevel || '低',
-        quantity: Number(rowData.quantity || 0),
+        quantity: addQty,
         unit: rowData.unit || '罐',
         expiresAt: rowData.expiresAt,
         status: rowData.status || '可用',
         createdAt: now,
         updatedAt: now,
         createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
-        history: [stamp('批量导入', `导入${rowData.quantity || 0}${rowData.unit || '罐'}`, operator)]
+        history: [stamp('批量导入', `导入${addQty}${rowData.unit || '罐'}${createdSuppliers.length || createdCabinets.length ? '，自动创建关联供应商/柜位' : ''}`, operator)]
       };
 
       db.batches.push(item);
@@ -1349,7 +1572,7 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
         collection: 'batches',
         targetId: item.id,
         targetItem: item,
-        note: `批量导入批次，数量：${rowData.quantity || 0}${rowData.unit || '罐'}`,
+        note: `批量导入批次，数量：${addQty}${rowData.unit || '罐'}${pendingCreate.supplier ? `，供应商「${pendingCreate.supplier.name}」待创建` : ''}${pendingCreate.cabinet ? `，柜位「${pendingCreate.cabinet.code}」待创建` : ''}`,
         operator
       });
     }
@@ -1358,7 +1581,11 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
     res.json({
       importedCount: imported.length,
       failedCount: failed.length,
+      createdSuppliersCount: createdSuppliers.length,
+      createdCabinetsCount: createdCabinets.length,
       imported,
+      createdSuppliers,
+      createdCabinets,
       failed
     });
   } catch (err) {

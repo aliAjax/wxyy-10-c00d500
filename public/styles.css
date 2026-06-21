@@ -1239,6 +1239,10 @@ main {
   color: var(--warn);
 }
 
+.import-stat-pending strong {
+  color: #6d5ab8;
+}
+
 .import-error-summary {
   display: flex;
   flex-wrap: wrap;
@@ -1311,6 +1315,27 @@ main {
   color: var(--bad);
 }
 
+.import-row-pending {
+  background: rgba(109, 90, 184, 0.08);
+}
+
+.import-row-pending td {
+  color: #5a4aa0;
+}
+
+.pill.pending {
+  background: rgba(109, 90, 184, 0.14);
+  color: #6d5ab8;
+}
+
+.pill.pending-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(109, 90, 184, 0.1);
+  color: #6d5ab8;
+  font-weight: 600;
+}
+
 .import-errors {
   display: flex;
   flex-direction: column;
@@ -1329,6 +1354,80 @@ main {
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px dashed var(--line);
+}
+
+.pending-forms-section {
+  margin-top: 16px;
+}
+
+.pending-forms-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.pending-edit-form {
+  background: rgba(109, 90, 184, 0.06);
+  border: 1px solid rgba(109, 90, 184, 0.2);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.pending-edit-form.pending-complete {
+  background: rgba(38, 115, 77, 0.06);
+  border-color: rgba(38, 115, 77, 0.2);
+}
+
+.pending-edit-form.pending-incomplete {
+  background: rgba(161, 61, 61, 0.04);
+  border-color: rgba(161, 61, 61, 0.2);
+}
+
+.pending-edit-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.pending-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.pending-edit-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pending-edit-grid input,
+.pending-edit-grid select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 10px 11px;
+  outline-color: var(--accent);
+  font-size: 14px;
+}
+
+.pending-edit-grid input[readonly],
+.pending-edit-grid select:disabled {
+  background: var(--panel-2);
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
+.pending-edit-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 
 @media (max-width: 980px) {

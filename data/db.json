@@ -50,6 +50,96 @@
           "note": "防爆柜建档"
         }
       ]
+    },
+    {
+      "id": "cabinets-1782020614900-55917",
+      "code": "防爆柜F-1",
+      "area": "F区地下库",
+      "capacity": 50,
+      "manager": "赵师傅",
+      "status": "空闲",
+      "createdAt": "2026-06-21T05:43:34.900Z",
+      "updatedAt": "2026-06-21T05:43:34.900Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T05:43:34.900Z",
+          "action": "创建",
+          "note": "批量导入时自动创建柜位台账",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "cabinets-1782022424555-0c8d2",
+      "code": "防爆柜G-1",
+      "area": "G区危险品库房",
+      "capacity": 50,
+      "manager": "王师傅",
+      "status": "使用中",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.555Z",
+          "action": "批量导入创建",
+          "note": "柜位「防爆柜G-1」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "cabinets-1782022424555-a01b2",
+      "code": "防爆柜H-2",
+      "area": "H区地下库房",
+      "capacity": 40,
+      "manager": "赵师傅",
+      "status": "使用中",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.555Z",
+          "action": "批量导入创建",
+          "note": "柜位「防爆柜H-2」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
     }
   ],
   "batches": [
@@ -286,6 +376,181 @@
         }
       ],
       "reservedQuantity": 0
+    },
+    {
+      "id": "batches-1782020614900-dd0da",
+      "name": "新型药剂X2",
+      "category": "特殊类",
+      "batchNo": "E2E-PEND-01",
+      "supplierId": "suppliers-1782020614900-fa3f3",
+      "cabinetId": "cabinets-1782020614900-55917",
+      "safetyLevel": "中",
+      "quantity": 5,
+      "unit": "箱",
+      "expiresAt": "2028-01-01",
+      "status": "可用",
+      "createdAt": "2026-06-21T05:43:34.900Z",
+      "updatedAt": "2026-06-21T05:43:34.900Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T05:43:34.900Z",
+          "action": "批量导入",
+          "note": "导入5箱",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "batches-1782022424554-94207",
+      "name": "冷焰火测试A",
+      "category": "冷焰火",
+      "batchNo": "TEST-VALID-005",
+      "supplierId": "supplier-seed-1",
+      "cabinetId": "cabinets-1782020614900-55917",
+      "safetyLevel": "高",
+      "quantity": 5,
+      "unit": "罐",
+      "expiresAt": "2027-12-31",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.554Z",
+          "action": "批量导入",
+          "note": "导入5罐",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "batches-1782022424554-e9f8c",
+      "name": "特殊药剂B",
+      "category": "特殊类",
+      "batchNo": "TEST-PEND-SUP-005",
+      "supplierId": "suppliers-1782022424554-0cfb7",
+      "cabinetId": "cabinets-1782020614900-55917",
+      "safetyLevel": "中",
+      "quantity": 3,
+      "unit": "箱",
+      "expiresAt": "2028-06-30",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.554Z",
+          "action": "批量导入",
+          "note": "导入3箱，自动创建关联供应商/柜位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "batches-1782022424555-1cc40",
+      "name": "礼花测试C",
+      "category": "礼花",
+      "batchNo": "TEST-PEND-CAB-005",
+      "supplierId": "supplier-seed-1",
+      "cabinetId": "cabinets-1782022424555-0c8d2",
+      "safetyLevel": "高",
+      "quantity": 4,
+      "unit": "发",
+      "expiresAt": "2027-03-15",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.555Z",
+          "action": "批量导入",
+          "note": "导入4发，自动创建关联供应商/柜位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "batches-1782022424555-9b0f5",
+      "name": "新型药剂D",
+      "category": "特殊类",
+      "batchNo": "TEST-PEND-BOTH-005",
+      "supplierId": "suppliers-1782022424555-8fe7f",
+      "cabinetId": "cabinets-1782022424555-a01b2",
+      "safetyLevel": "高",
+      "quantity": 2,
+      "unit": "箱",
+      "expiresAt": "2029-01-01",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.555Z",
+          "action": "批量导入",
+          "note": "导入2箱，自动创建关联供应商/柜位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
     }
   ],
   "requests": [
@@ -429,6 +694,102 @@
           "at": "2026-05-20T08:00:00.000Z",
           "action": "创建",
           "note": "建立供应商档案"
+        }
+      ]
+    },
+    {
+      "id": "suppliers-1782020614900-fa3f3",
+      "name": "紫光烟火公司",
+      "contact": "李经理",
+      "phone": "139-8888-7777",
+      "category": "特殊烟火药剂",
+      "riskLevel": "高",
+      "certExpiresAt": "2029-06-30",
+      "status": "合作中",
+      "createdAt": "2026-06-21T05:43:34.900Z",
+      "updatedAt": "2026-06-21T05:43:34.900Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T05:43:34.900Z",
+          "action": "创建",
+          "note": "批量导入时自动创建供应商档案",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "suppliers-1782022424554-0cfb7",
+      "name": "新星烟火公司",
+      "contact": "张经理",
+      "phone": "138-1234-5678",
+      "category": "特殊类",
+      "riskLevel": "低",
+      "certExpiresAt": "2029-12-31",
+      "status": "合作中",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.554Z",
+          "action": "批量导入创建",
+          "note": "供应商「新星烟火公司」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "suppliers-1782022424555-8fe7f",
+      "name": "紫光科技公司",
+      "contact": "李经理",
+      "phone": "139-8765-4321",
+      "category": "特殊类",
+      "riskLevel": "低",
+      "certExpiresAt": "2028-06-30",
+      "status": "合作中",
+      "createdAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:13:44.555Z",
+          "action": "批量导入创建",
+          "note": "供应商「紫光科技公司」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
         }
       ]
     }
@@ -676,6 +1037,918 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1782022424555-68389",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782022424555-9b0f5",
+      "targetLabel": "新型药剂D / TEST-PEND-BOTH-005",
+      "changes": {
+        "id": {
+          "after": "batches-1782022424555-9b0f5"
+        },
+        "name": {
+          "after": "新型药剂D"
+        },
+        "category": {
+          "after": "特殊类"
+        },
+        "batchNo": {
+          "after": "TEST-PEND-BOTH-005"
+        },
+        "supplierId": {
+          "after": "suppliers-1782022424555-8fe7f"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782022424555-a01b2"
+        },
+        "safetyLevel": {
+          "after": "高"
+        },
+        "quantity": {
+          "after": 2
+        },
+        "unit": {
+          "after": "箱"
+        },
+        "expiresAt": {
+          "after": "2029-01-01"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.555Z",
+              "action": "批量导入",
+              "note": "导入2箱，自动创建关联供应商/柜位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：2箱，供应商「紫光科技公司」待创建，柜位「防爆柜H-2」待创建",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.555Z"
+    },
+    {
+      "id": "auditLogs-1782022424555-c9c9f",
+      "actionType": "批量导入创建",
+      "targetCollection": "cabinets",
+      "targetId": "cabinets-1782022424555-a01b2",
+      "targetLabel": "防爆柜H-2 / H区地下库房",
+      "changes": {
+        "id": {
+          "after": "cabinets-1782022424555-a01b2"
+        },
+        "code": {
+          "after": "防爆柜H-2"
+        },
+        "area": {
+          "after": "H区地下库房"
+        },
+        "capacity": {
+          "after": 40
+        },
+        "manager": {
+          "after": "赵师傅"
+        },
+        "status": {
+          "after": "使用中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.555Z",
+              "action": "批量导入创建",
+              "note": "柜位「防爆柜H-2」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建柜位：防爆柜H-2",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.555Z"
+    },
+    {
+      "id": "auditLogs-1782022424555-c281d",
+      "actionType": "批量导入创建",
+      "targetCollection": "suppliers",
+      "targetId": "suppliers-1782022424555-8fe7f",
+      "targetLabel": "紫光科技公司",
+      "changes": {
+        "id": {
+          "after": "suppliers-1782022424555-8fe7f"
+        },
+        "name": {
+          "after": "紫光科技公司"
+        },
+        "contact": {
+          "after": "李经理"
+        },
+        "phone": {
+          "after": "139-8765-4321"
+        },
+        "category": {
+          "after": "特殊类"
+        },
+        "riskLevel": {
+          "after": "低"
+        },
+        "certExpiresAt": {
+          "after": "2028-06-30"
+        },
+        "status": {
+          "after": "合作中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.555Z",
+              "action": "批量导入创建",
+              "note": "供应商「紫光科技公司」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建供应商：紫光科技公司",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.555Z"
+    },
+    {
+      "id": "auditLogs-1782022424555-0ca4d",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782022424555-1cc40",
+      "targetLabel": "礼花测试C / TEST-PEND-CAB-005",
+      "changes": {
+        "id": {
+          "after": "batches-1782022424555-1cc40"
+        },
+        "name": {
+          "after": "礼花测试C"
+        },
+        "category": {
+          "after": "礼花"
+        },
+        "batchNo": {
+          "after": "TEST-PEND-CAB-005"
+        },
+        "supplierId": {
+          "after": "supplier-seed-1"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782022424555-0c8d2"
+        },
+        "safetyLevel": {
+          "after": "高"
+        },
+        "quantity": {
+          "after": 4
+        },
+        "unit": {
+          "after": "发"
+        },
+        "expiresAt": {
+          "after": "2027-03-15"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.555Z",
+              "action": "批量导入",
+              "note": "导入4发，自动创建关联供应商/柜位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：4发，柜位「防爆柜G-1」待创建",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.555Z"
+    },
+    {
+      "id": "auditLogs-1782022424555-9667d",
+      "actionType": "批量导入创建",
+      "targetCollection": "cabinets",
+      "targetId": "cabinets-1782022424555-0c8d2",
+      "targetLabel": "防爆柜G-1 / G区危险品库房",
+      "changes": {
+        "id": {
+          "after": "cabinets-1782022424555-0c8d2"
+        },
+        "code": {
+          "after": "防爆柜G-1"
+        },
+        "area": {
+          "after": "G区危险品库房"
+        },
+        "capacity": {
+          "after": 50
+        },
+        "manager": {
+          "after": "王师傅"
+        },
+        "status": {
+          "after": "使用中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.555Z",
+              "action": "批量导入创建",
+              "note": "柜位「防爆柜G-1」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建柜位：防爆柜G-1",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.555Z"
+    },
+    {
+      "id": "auditLogs-1782022424554-349bd",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782022424554-e9f8c",
+      "targetLabel": "特殊药剂B / TEST-PEND-SUP-005",
+      "changes": {
+        "id": {
+          "after": "batches-1782022424554-e9f8c"
+        },
+        "name": {
+          "after": "特殊药剂B"
+        },
+        "category": {
+          "after": "特殊类"
+        },
+        "batchNo": {
+          "after": "TEST-PEND-SUP-005"
+        },
+        "supplierId": {
+          "after": "suppliers-1782022424554-0cfb7"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782020614900-55917"
+        },
+        "safetyLevel": {
+          "after": "中"
+        },
+        "quantity": {
+          "after": 3
+        },
+        "unit": {
+          "after": "箱"
+        },
+        "expiresAt": {
+          "after": "2028-06-30"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.554Z",
+              "action": "批量导入",
+              "note": "导入3箱，自动创建关联供应商/柜位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：3箱，供应商「新星烟火公司」待创建",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.554Z"
+    },
+    {
+      "id": "auditLogs-1782022424554-6af42",
+      "actionType": "批量导入创建",
+      "targetCollection": "suppliers",
+      "targetId": "suppliers-1782022424554-0cfb7",
+      "targetLabel": "新星烟火公司",
+      "changes": {
+        "id": {
+          "after": "suppliers-1782022424554-0cfb7"
+        },
+        "name": {
+          "after": "新星烟火公司"
+        },
+        "contact": {
+          "after": "张经理"
+        },
+        "phone": {
+          "after": "138-1234-5678"
+        },
+        "category": {
+          "after": "特殊类"
+        },
+        "riskLevel": {
+          "after": "低"
+        },
+        "certExpiresAt": {
+          "after": "2029-12-31"
+        },
+        "status": {
+          "after": "合作中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.554Z",
+              "action": "批量导入创建",
+              "note": "供应商「新星烟火公司」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建供应商：新星烟火公司",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.554Z"
+    },
+    {
+      "id": "auditLogs-1782022424554-756b4",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782022424554-94207",
+      "targetLabel": "冷焰火测试A / TEST-VALID-005",
+      "changes": {
+        "id": {
+          "after": "batches-1782022424554-94207"
+        },
+        "name": {
+          "after": "冷焰火测试A"
+        },
+        "category": {
+          "after": "冷焰火"
+        },
+        "batchNo": {
+          "after": "TEST-VALID-005"
+        },
+        "supplierId": {
+          "after": "supplier-seed-1"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782020614900-55917"
+        },
+        "safetyLevel": {
+          "after": "高"
+        },
+        "quantity": {
+          "after": 5
+        },
+        "unit": {
+          "after": "罐"
+        },
+        "expiresAt": {
+          "after": "2027-12-31"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:13:44.554Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:13:44.554Z",
+              "action": "批量导入",
+              "note": "导入5罐",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：5罐",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:13:44.554Z"
+    },
+    {
+      "id": "auditLogs-1782020614900-fc723",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782020614900-dd0da",
+      "targetLabel": "新型药剂X2 / E2E-PEND-01",
+      "changes": {
+        "id": {
+          "after": "batches-1782020614900-dd0da"
+        },
+        "name": {
+          "after": "新型药剂X2"
+        },
+        "category": {
+          "after": "特殊类"
+        },
+        "batchNo": {
+          "after": "E2E-PEND-01"
+        },
+        "supplierId": {
+          "after": "suppliers-1782020614900-fa3f3"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782020614900-55917"
+        },
+        "safetyLevel": {
+          "after": "中"
+        },
+        "quantity": {
+          "after": 5
+        },
+        "unit": {
+          "after": "箱"
+        },
+        "expiresAt": {
+          "after": "2028-01-01"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T05:43:34.900Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T05:43:34.900Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T05:43:34.900Z",
+              "action": "批量导入",
+              "note": "导入5箱",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：5箱",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T05:43:34.900Z"
+    },
+    {
+      "id": "auditLogs-1782020614900-2179a",
+      "actionType": "批量导入创建(关联)",
+      "targetCollection": "cabinets",
+      "targetId": "cabinets-1782020614900-55917",
+      "targetLabel": "防爆柜F-1 / F区地下库",
+      "changes": {
+        "id": {
+          "after": "cabinets-1782020614900-55917"
+        },
+        "code": {
+          "after": "防爆柜F-1"
+        },
+        "area": {
+          "after": "F区地下库"
+        },
+        "capacity": {
+          "after": 50
+        },
+        "manager": {
+          "after": "赵师傅"
+        },
+        "status": {
+          "after": "空闲"
+        },
+        "createdAt": {
+          "after": "2026-06-21T05:43:34.900Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T05:43:34.900Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T05:43:34.900Z",
+              "action": "创建",
+              "note": "批量导入时自动创建柜位台账",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次时自动创建柜位：防爆柜F-1",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T05:43:34.900Z"
+    },
+    {
+      "id": "auditLogs-1782020614900-3b382",
+      "actionType": "批量导入创建(关联)",
+      "targetCollection": "suppliers",
+      "targetId": "suppliers-1782020614900-fa3f3",
+      "targetLabel": "紫光烟火公司",
+      "changes": {
+        "id": {
+          "after": "suppliers-1782020614900-fa3f3"
+        },
+        "name": {
+          "after": "紫光烟火公司"
+        },
+        "contact": {
+          "after": "李经理"
+        },
+        "phone": {
+          "after": "139-8888-7777"
+        },
+        "category": {
+          "after": "特殊烟火药剂"
+        },
+        "riskLevel": {
+          "after": "高"
+        },
+        "certExpiresAt": {
+          "after": "2029-06-30"
+        },
+        "status": {
+          "after": "合作中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T05:43:34.900Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T05:43:34.900Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T05:43:34.900Z",
+              "action": "创建",
+              "note": "批量导入时自动创建供应商档案",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次时自动创建供应商：紫光烟火公司",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T05:43:34.900Z"
+    },
+    {
+      "id": "auditLogs-1782019621560-35f9c",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782019621560-12c5b",
+      "targetLabel": "新型药剂X1 / X1-NEW-003",
+      "changes": {
+        "id": {
+          "after": "batches-1782019621560-12c5b"
+        },
+        "name": {
+          "after": "新型药剂X1"
+        },
+        "category": {
+          "after": "特殊类"
+        },
+        "batchNo": {
+          "after": "X1-NEW-003"
+        },
+        "supplierId": {
+          "after": "suppliers-1782019621560-11979"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782019621560-cdb57"
+        },
+        "safetyLevel": {
+          "after": "中"
+        },
+        "quantity": {
+          "after": 5
+        },
+        "unit": {
+          "after": "箱"
+        },
+        "expiresAt": {
+          "after": "2028-01-01"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T05:27:01.560Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T05:27:01.560Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T05:27:01.560Z",
+              "action": "批量导入",
+              "note": "导入5箱",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：5箱",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T05:27:01.560Z"
+    },
     {
       "id": "auditLogs-1782012573536-39495",
       "actionType": "出库(关联)",
