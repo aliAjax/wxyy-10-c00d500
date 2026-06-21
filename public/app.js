@@ -2697,10 +2697,17 @@ function collectStocktakeItems(stocktakeId) {
 function collectWasteDisposalData(wasteId) {
   const inputs = state.wasteDisposalInputs?.[wasteId] || {};
   const waste = state.db.wastes?.find(w => w.id === wasteId);
+  const qty = Number(waste?.quantity || 0);
+  const disposedQty = Number(waste?.disposedQuantity ?? waste?.actualQuantity ?? 0);
+  const remainingQty = Number(waste?.remainingQuantity ?? Math.max(0, qty - disposedQty));
+  const fallbackQty = waste?.status === '部分处置' && remainingQty > 0 ? remainingQty : qty;
+  const lastRecord = (waste?.status === '部分处置' && Array.isArray(waste?.disposalRecords) && waste.disposalRecords.length > 0)
+    ? waste.disposalRecords[waste.disposalRecords.length - 1]
+    : null;
   return {
-    actualQuantity: inputs.actualQuantity !== undefined ? Number(inputs.actualQuantity) : Number(waste?.quantity || 0),
-    disposalMethod: inputs.disposalMethod || waste?.disposalMethod || '',
-    witness: inputs.witness || '',
+    actualQuantity: inputs.actualQuantity !== undefined ? Number(inputs.actualQuantity) : fallbackQty,
+    disposalMethod: inputs.disposalMethod || lastRecord?.disposalMethod || waste?.disposalMethod || '',
+    witness: inputs.witness || lastRecord?.witness || waste?.witness || '',
     disposalNote: inputs.disposalNote || ''
   };
 }
