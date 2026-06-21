@@ -912,12 +912,46 @@ function renderStocktakeItemRows(stocktake) {
     if (confirmed && diff !== 0) {
       const suggestionText = suggestion.suggestion || (diff > 0 ? '建议补入库备注' : '建议补登记报废');
       let actionBtn = '';
+      let disabledReason = '';
+
+      const deficitQty = Math.abs(diff);
+      const stockQty = Number(batch.quantity || 0);
+      const reservedQty = Number(batch.reservedQuantity || 0);
+      const availableQty = Math.max(0, stockQty - reservedQty);
+      const maxAllowed = Math.min(deficitQty, availableQty + deficitQty);
+
       if (diff < 0 && actionStatus === 'pending' && canCreateWaste) {
-        actionBtn = `<button class="ghost danger" data-create-waste-from-stocktake="${stocktake.id}" data-batch-id="${item.batchId}" style="padding:6px 10px;font-size:12px;">创建报废单草稿</button>`;
+        if (batch.status === '已报废') {
+          disabledReason = '批次已报废';
+          actionBtn = `<span class="pill muted" style="font-size:11px;">⚠ 批次已报废</span>`;
+        } else if (maxAllowed <= 0) {
+          disabledReason = `无可报废数量（盘亏${deficitQty}${batch.unit || ''}，但可用库存${availableQty}${batch.unit || ''}为负）`;
+          actionBtn = `<span class="pill warn" style="font-size:11px;">⚠ 无可报废数量</span>`;
+        } else {
+          const wasteExists = (state.db.wastes || []).some((w) =>
+            w.batchId === item.batchId && w.stocktakeId === stocktake.id &&
+            w.status !== '已驳回' && w.status !== '已撤销'
+          );
+          if (wasteExists) {
+            actionBtn = `<span class="pill warn" style="font-size:11px;">⚠ 已有未完成报废单</span>`;
+          } else {
+            actionBtn = `<button class="ghost danger" data-create-waste-from-stocktake="${stocktake.id}" data-batch-id="${item.batchId}" data-deficit-qty="${deficitQty}" data-available-qty="${availableQty}" style="padding:6px 10px;font-size:12px;">创建报废单草稿</button>`;
+          }
+        }
       } else if (diff < 0 && actionStatus === 'registered' && suggestion.wasteId) {
         const waste = (state.db.wastes || []).find((w) => w.id === suggestion.wasteId);
-        const wasteLabel = waste ? `${waste.code || waste.id}（${waste.status}）` : '已创建';
-        actionBtn = `<span class="pill ok" style="font-size:11px;">📋 ${escapeHtml(wasteLabel)}</span>`;
+        if (waste) {
+          const wasteLabel = `${waste.code || waste.id}（${waste.status}）`;
+          const canView = true;
+          actionBtn = `<span class="pill ok" style="font-size:11px;cursor:pointer;" data-view-waste="${waste.id}" title="点击查看报废单">📋 ${escapeHtml(wasteLabel)}</span>`;
+        } else {
+          actionBtn = `<span class="pill warn" style="font-size:11px;">⚠ 报废单数据异常</span>`;
+        }
+      } else if (diff < 0 && actionStatus === 'completed') {
+        const wasteLabel = suggestion.actualWasteQty
+          ? `已报废 ${suggestion.actualWasteQty}${batch.unit || ''}`
+          : '已处理完成';
+        actionBtn = `<span class="pill ok" style="font-size:11px;">✓ ${escapeHtml(wasteLabel)}</span>`;
       } else if (diff > 0 && actionStatus === 'pending' && canMarkNote) {
         actionBtn = `<button class="ghost" data-mark-stocktake-note="${stocktake.id}" data-batch-id="${item.batchId}" style="padding:6px 10px;font-size:12px;">标记已补备注</button>`;
       } else if (diff > 0 && actionStatus === 'completed') {
@@ -2302,8 +2336,65 @@ document.addEventListener('click', async (e) => {
   if (openWasteFromStocktake) {
     const stocktakeId = openWasteFromStocktake.dataset.createWasteFromStocktake;
     const batchId = openWasteFromStocktake.dataset.batchId;
+    const deficitQty = Number(openWasteFromStocktake.dataset.deficitQty || 0);
+    const availableQty = Number(openWasteFromStocktake.dataset.availableQty || 0);
+    const batch = state.db.batches?.find((b) => b.id === batchId);
+    const stocktake = state.db.stocktakes?.find((s) => s.id === stocktakeId);
+
+    if (!batch) {
+      toast('批次不存在，无法发起报废');
+      return;
+    }
+    if (batch.status === '已报废') {
+      toast('该批次已报废，无法重复发起报废');
+      return;
+    }
+    if (!stocktake || stocktake.status !== '已确认') {
+      toast('盘点单未确认，无法发起报废');
+      return;
+    }
+
+    const diffItem = (stocktake.diffSuggestions || []).find((d) => d.batchId === batchId);
+    if (diffItem && diffItem.actionStatus === 'registered' && diffItem.wasteId) {
+      const existingWaste = (state.db.wastes || []).find((w) => w.id === diffItem.wasteId && w.status !== '已驳回' && w.status !== '已撤销');
+      if (existingWaste) {
+        if (!confirm(`该盘亏项已存在报废单「${existingWaste.code || existingWaste.id}」（${existingWaste.status}），是否跳转到报废页面查看？`)) {
+          return;
+        }
+        state.activeView = 'wastes';
+        state.activeTab = 'wastes';
+        state.expandedWaste = existingWaste.id;
+        render();
+        setTimeout(() => {
+          const card = document.querySelector(`[data-expand-waste="${existingWaste.id}"]`);
+          if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            card.classList.add('waste-form-highlight');
+            setTimeout(() => card.classList.remove('waste-form-highlight'), 2500);
+          }
+        }, 100);
+        return;
+      }
+    }
+
+    const maxAllowed = Math.min(deficitQty, availableQty + deficitQty);
+    if (maxAllowed <= 0) {
+      toast(`无可报废数量：盘亏${deficitQty}${batch.unit || ''}，但当前可用库存${availableQty}${batch.unit || ''}，请先检查批次状态`);
+      return;
+    }
+
+    if (deficitQty > 0 && availableQty < deficitQty) {
+      if (!confirm(`盘亏数量为${deficitQty}${batch.unit || ''}，但当前可用库存仅${availableQty}${batch.unit || ''}。\n\n报废单将预填盘亏数量${deficitQty}${batch.unit || ''}，其中${availableQty}${batch.unit || ''}从当前库存扣减，${deficitQty - availableQty}${batch.unit || ''}由盘点盘亏已扣减抵充。\n\n是否继续？`)) {
+        return;
+      }
+    }
+
     try {
       const prefill = await api(`/api/batches/${batchId}/waste-prefill?stocktakeId=${encodeURIComponent(stocktakeId)}`);
+      if (!prefill || !prefill.batchId) {
+        toast('获取预填充信息失败，请稍后重试');
+        return;
+      }
       state.wastePrefill = prefill;
       state.activeView = 'wastes';
       state.activeTab = 'wastes';
@@ -2316,10 +2407,36 @@ document.addEventListener('click', async (e) => {
           setTimeout(() => form.classList.remove('waste-form-highlight'), 2500);
         }
       }, 100);
-      toast('已带入盘点盘亏报废信息，请确认后提交（提交后将自动在盘点单记录已处理）');
+      const prefillQty = prefill.quantity || deficitQty;
+      const deductFromStock = Math.max(0, prefillQty - deficitQty);
+      const offsetByStocktake = Math.min(prefillQty, deficitQty);
+      toast(`已带入盘点盘亏报废信息：预填报废${prefillQty}${batch.unit || ''}，其中${offsetByStocktake}${batch.unit || ''}由盘亏已扣减抵充${deductFromStock > 0 ? `，${deductFromStock}${batch.unit || ''}从当前库存扣减` : ''}。请确认后提交。`);
     } catch (err) {
-      toast(err.message || '获取预填充信息失败');
+      toast(err.message || '获取预填充信息失败，请检查盘点单和批次状态');
     }
+    return;
+  }
+
+  const viewWaste = e.target.closest('[data-view-waste]');
+  if (viewWaste) {
+    const wasteId = viewWaste.dataset.viewWaste;
+    const waste = (state.db.wastes || []).find((w) => w.id === wasteId);
+    if (!waste) {
+      toast('报废单不存在');
+      return;
+    }
+    state.activeView = 'wastes';
+    state.activeTab = 'wastes';
+    state.expandedWaste = wasteId;
+    render();
+    setTimeout(() => {
+      const card = document.querySelector(`[data-expand-waste="${wasteId}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('waste-form-highlight');
+        setTimeout(() => card.classList.remove('waste-form-highlight'), 2500);
+      }
+    }, 100);
     return;
   }
 

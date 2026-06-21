@@ -277,6 +277,11 @@ main {
   color: var(--bad);
 }
 
+.pill.muted {
+  background: rgba(120, 113, 108, .14);
+  color: #78716c;
+}
+
 .detail {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
