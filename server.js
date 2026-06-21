@@ -1535,6 +1535,75 @@ app.delete('/api/schedules/:id', requireUser, async (req, res) => {
   res.status(204).end();
 });
 
+function escapeCsvField(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (/[",\n\r]/.test(str)) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+function summarizeChanges(changes) {
+  if (!changes || typeof changes !== 'object') return '';
+  const keys = Object.keys(changes);
+  if (!keys.length) return '';
+  return keys.map((key) => {
+    const c = changes[key];
+    const before = c?.before === undefined || c?.before === null || c?.before === '' ? '(空)' : String(c.before);
+    const after = c?.after === undefined || c?.after === null || c?.after === '' ? '(空)' : String(c.after);
+    return `${key}: ${before} → ${after}`;
+  }).join('；');
+}
+
+app.get('/api/audit-logs/export', requireUser, async (req, res) => {
+  const db = await readDb();
+  let logs = [...(db.auditLogs || [])];
+
+  const actionType = req.query.actionType || '';
+  const targetCollection = req.query.targetCollection || '';
+  const keyword = (req.query.search || '').trim();
+
+  if (actionType) {
+    logs = logs.filter((log) => log.actionType === actionType);
+  }
+  if (targetCollection) {
+    logs = logs.filter((log) => log.targetCollection === targetCollection);
+  }
+  if (keyword) {
+    logs = logs.filter((log) => {
+      const inLabel = (log.targetLabel || '').includes(keyword);
+      const inNote = (log.note || '').includes(keyword);
+      const inOperator = (log.operator || '').includes(keyword);
+      const inId = (log.targetId || '').includes(keyword);
+      const inAction = (log.actionType || '').includes(keyword);
+      return inLabel || inNote || inOperator || inId || inAction;
+    });
+  }
+
+  const headers = ['操作时间', '操作类型', '目标集合', '目标标题', '操作人', '备注', '字段变化摘要'];
+  const rows = logs.map((log) => [
+    log.createdAt ? new Date(log.createdAt).toLocaleString('zh-CN', { hour12: false }) : '',
+    log.actionType || '',
+    collectionLabel(log.targetCollection) || log.targetCollection || '',
+    log.targetLabel || log.targetId || '',
+    log.operator && log.operator !== SYSTEM_IMPORT_LABEL ? log.operator : SYSTEM_IMPORT_LABEL,
+    log.note || '',
+    summarizeChanges(log.changes)
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeCsvField).join(','))
+    .join('\r\n');
+
+  const bom = '\uFEFF';
+  const filename = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(bom + csvContent);
+});
+
 app.listen(PORT, () => {
   console.log(`${config.title} running at http://localhost:${PORT}`);
 });

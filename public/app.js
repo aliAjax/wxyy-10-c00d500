@@ -1136,6 +1136,33 @@ function renderAuditLogCard(log) {
   </article>`;
 }
 
+function getFilteredAuditLogsCount(viewId) {
+  const actionType = state.filters[viewId]?.actionType || '';
+  const targetColl = state.filters[viewId]?.targetCollection || '';
+  const keyword = state.filters[viewId]?.search?.trim() || '';
+
+  let items = [...(state.db.auditLogs || [])];
+
+  if (actionType) {
+    items = items.filter((item) => item.actionType === actionType);
+  }
+  if (targetColl) {
+    items = items.filter((item) => item.targetCollection === targetColl);
+  }
+  if (keyword) {
+    items = items.filter((item) => {
+      const inLabel = (item.targetLabel || '').includes(keyword);
+      const inNote = (item.note || '').includes(keyword);
+      const inOperator = (item.operator || '').includes(keyword);
+      const inId = (item.targetId || '').includes(keyword);
+      const inAction = (item.actionType || '').includes(keyword);
+      return inLabel || inNote || inOperator || inId || inAction;
+    });
+  }
+
+  return items.length;
+}
+
 function renderAuditLogsList(view) {
   const actionType = state.filters[view.id]?.actionType || '';
   const targetColl = state.filters[view.id]?.targetCollection || '';
@@ -1176,11 +1203,19 @@ function renderAuditLogsView(view) {
   const actionTypes = state.config.auditLog?.actionTypes || [];
   const targetCollections = state.config.auditLog?.targetCollections || [];
   const f = state.filters[view.id] || {};
+  const filteredCount = getFilteredAuditLogsCount(view.id);
 
   return `<section class="view" id="${view.id}">
     <div class="panel">
-      <h2>操作审计日志</h2>
-      <p class="meta">所有关键操作均会自动记录，日志只读不可修改。</p>
+      <div class="audit-header">
+        <div>
+          <h2>操作审计日志</h2>
+          <p class="meta">所有关键操作均会自动记录，日志只读不可修改。当前筛选结果共 <strong>${filteredCount}</strong> 条。</p>
+        </div>
+        <button class="export-btn" data-export-audit="${view.id}">
+          <span class="export-icon">⬇</span> 导出 CSV
+        </button>
+      </div>
       <div class="audit-toolbar">
         <select data-audit-action="${view.id}">
           <option value="">全部操作类型</option>
@@ -2245,6 +2280,40 @@ document.addEventListener('click', async (e) => {
     state.activeTab = 'schedules';
     state.activeView = 'schedules';
     render();
+    return;
+  }
+
+  const exportAudit = e.target.closest('[data-export-audit]');
+  if (exportAudit) {
+    const viewId = exportAudit.dataset.exportAudit;
+    const f = state.filters[viewId] || {};
+    const params = new URLSearchParams();
+    if (f.actionType) params.set('actionType', f.actionType);
+    if (f.targetCollection) params.set('targetCollection', f.targetCollection);
+    if (f.search?.trim()) params.set('search', f.search.trim());
+    const qs = params.toString();
+    const url = '/api/audit-logs/export' + (qs ? '?' + qs : '');
+    try {
+      const res = await fetch(url, { headers: { 'x-current-user-id': state.currentUser.id } });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || '导出失败');
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      const filename = match ? match[1] : 'audit-logs.csv';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      toast('导出成功');
+    } catch (err) {
+      toast(err.message || '导出失败');
+    }
     return;
   }
 });

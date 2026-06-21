@@ -966,6 +966,63 @@ main {
   }
 }
 
+.audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.audit-header h2 {
+  margin: 0 0 4px;
+}
+
+.audit-header .meta {
+  margin: 0;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #34312b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s ease, transform .1s ease;
+  flex-shrink: 0;
+}
+
+.export-btn:hover {
+  background: var(--ink);
+  transform: translateY(-1px);
+}
+
+.export-btn:active {
+  transform: translateY(0);
+}
+
+.export-icon {
+  font-size: 14px;
+}
+
+@media (max-width: 620px) {
+  .audit-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .export-btn {
+    align-self: flex-start;
+  }
+}
+
 /* 批量导入模块样式 */
 .import-input-area {
   margin-top: 16px;
