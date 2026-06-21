@@ -183,6 +183,26 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
       history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`, operator)]
     };
+  } else if (collection === 'requests') {
+    const batch = db.batches.find((b) => b.id === req.body.batchId);
+    if (!batch) return res.status(409).json({ error: '批次不存在' });
+    if (batch.status !== '可用') return res.status(409).json({ error: `批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可领用` });
+    const reqQty = Number(req.body.quantity || 0);
+    const stockQty = Number(batch.quantity || 0);
+    const reservedQty = Number(batch.reservedQuantity || 0);
+    const availableQty = Math.max(0, stockQty - reservedQty);
+    if (reqQty <= 0) return res.status(409).json({ error: '领用数量必须大于0' });
+    if (reqQty > availableQty) return res.status(409).json({ error: `批次「${batch.name}/${batch.batchNo}」可用${availableQty}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${reqQty}${batch.unit || ''}，请先关闭相关调度单` });
+    if (reqQty > stockQty) return res.status(409).json({ error: `领用数量(${reqQty}${batch.unit || ''})超过当前库存(${stockQty}${batch.unit || ''})` });
+    item = {
+      id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      ...req.body,
+      status: '待审批',
+      createdAt: now,
+      updatedAt: now,
+      createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+      history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请领用：${req.body.quantity}${batch.unit || ''}`, operator)]
+    };
   } else if (collection === 'batches') {
     const defaultNote = req.body.note || req.body.memo || '';
     const cabinetId = req.body.cabinetId;
@@ -256,6 +276,27 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
       if (newQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
       if (newQty > stockQty) return res.status(409).json({ error: `报废数量(${newQty})超过当前库存(${stockQty})` });
       if (newQty > availableQty) return res.status(409).json({ error: `报废数量(${newQty})超过可用库存(${availableQty})，有${reservedQty}已被调度预占，请先关闭相关调度单` });
+    }
+  } else if (collection === 'requests') {
+    const protectedFields = ['status', 'approver', 'approvedAt', 'issuedBy', 'issuedAt', 'returned', 'returnedAt'];
+    const hasProtected = protectedFields.some(f => f in req.body);
+    if (hasProtected) {
+      return res.status(409).json({ error: '领用申请状态和审批信息不能直接修改，请走正规审批流程' });
+    }
+    if (item.status !== '待审批' && item.status !== '已驳回') {
+      return res.status(409).json({ error: '只有待审批或已驳回状态的领用申请可以编辑' });
+    }
+    if (req.body.quantity !== undefined || req.body.batchId !== undefined) {
+      const batch = db.batches.find((b) => b.id === (req.body.batchId || item.batchId));
+      if (!batch) return res.status(409).json({ error: '批次不存在' });
+      if (batch.status !== '可用') return res.status(409).json({ error: `批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可领用` });
+      const newQty = Number((req.body.quantity !== undefined ? req.body.quantity : item.quantity) || 0);
+      const stockQty = Number(batch.quantity || 0);
+      const reservedQty = Number(batch.reservedQuantity || 0);
+      const availableQty = Math.max(0, stockQty - reservedQty);
+      if (newQty <= 0) return res.status(409).json({ error: '领用数量必须大于0' });
+      if (newQty > availableQty) return res.status(409).json({ error: `批次「${batch.name}/${batch.batchNo}」可用${availableQty}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${newQty}${batch.unit || ''}，请先关闭相关调度单` });
+      if (newQty > stockQty) return res.status(409).json({ error: `领用数量(${newQty}${batch.unit || ''})超过当前库存(${stockQty}${batch.unit || ''})` });
     }
   }
 
@@ -416,7 +457,7 @@ function preActionCheck(db, action, item) {
       return { error: '该批次还有库存，请通过报废单流程完成报废处置' };
     }
   }
-  if (action.id === 'request-issue' && action.collection === 'requests') {
+  if ((action.id === 'request-approve' || action.id === 'request-issue') && action.collection === 'requests') {
     const batch = db.batches?.find((b) => b.id === item.batchId);
     if (batch) {
       const stockQty = Number(batch.quantity || 0);
@@ -424,7 +465,8 @@ function preActionCheck(db, action, item) {
       const available = Math.max(0, stockQty - reservedQty);
       const reqQty = Number(item.quantity || 0);
       if (reqQty > available) {
-        return { error: `批次「${batch.name}/${batch.batchNo}」可用${available}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${reqQty}${batch.unit || ''}，请先关闭相关调度单` };
+        const opName = action.id === 'request-approve' ? '审批' : '出库';
+        return { error: `批次「${batch.name}/${batch.batchNo}」可用${available}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${reqQty}${batch.unit || ''}，无法${opName}，请先关闭相关调度单` };
       }
     }
   }

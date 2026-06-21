@@ -446,7 +446,6 @@ module.exports = {
       relation: { collection: 'batches', localKey: 'batchId' },
       guards: [
         { left: 'related.status', op: 'eq', right: '可用', message: '批次不可用，不能出库' },
-        { left: 'related.quantity', op: 'gte', rightPath: 'item.quantity', message: '库存不足，不能出库' },
         { left: 'related.safetyLevel', op: 'levelGte', rightPath: 'item.safetyLevel', message: '安全等级不匹配，不能出库' }
       ],
       patches: [{ field: 'status', value: '已出库' }],
