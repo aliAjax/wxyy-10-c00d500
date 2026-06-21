@@ -2005,8 +2005,11 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
   const suggestedCode = `BF${todayStr}${seqNum}`;
 
   const batchTitle = [batch.name, batch.batchNo].filter(Boolean).join(' / ');
+  const stocktakeLabel = stocktakeInfo
+    ? stocktakeInfo.stocktakeCode || stocktakeInfo.stocktakeId
+    : '';
   const suggestedTitle = stocktakeInfo
-    ? `【盘点盘亏】${stocktakeInfo.stocktakeCode || stocktake.id} - ${batchTitle}报废申请`
+    ? `【盘点盘亏】${stocktakeLabel} - ${batchTitle}报废申请`
     : `【${reasonPrefix}】${batchTitle}报废申请`;
   const stocktakeNote = stocktakeInfo
     ? `盘点单：${stocktakeInfo.stocktakeCode || stocktakeInfo.stocktakeId}${stocktakeInfo.stocktakeTitle ? '（' + stocktakeInfo.stocktakeTitle + '）' : ''}，盘亏数量：${deficitQty}${batch.unit || ''}。`
@@ -2019,6 +2022,7 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
   const cabinet = db.cabinets?.find((c) => c.id === batch.cabinetId);
 
   const prefQty = deficitQty > 0 ? deficitQty : getBatchAvailableQuantity(batch);
+  const maxQuantity = stocktakeInfo ? prefQty : getBatchAvailableQuantity(batch);
 
   res.json({
     batchId: batch.id,
@@ -2043,7 +2047,7 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
     stocktakeInfo,
     reservedQuantity: Number(batch.reservedQuantity || 0),
     availableQuantity: getBatchAvailableQuantity(batch),
-    maxQuantity: getBatchAvailableQuantity(batch)
+    maxQuantity
   });
 });
 
