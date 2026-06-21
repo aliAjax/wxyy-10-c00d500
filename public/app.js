@@ -821,12 +821,41 @@ function renderStocktakeDiffSummary(stocktake) {
     </div>
   ` : `<div class="diff-summary"><span class="diff-stat consistent">所有批次账实一致</span></div>`;
   const netDiff = summary.totalDiff ?? summary.surplusQty - summary.deficitQty;
+
+  let suggestionPart = '';
+  if (stocktake.status === '已确认' && stocktake.suggestionSummary) {
+    const s = stocktake.suggestionSummary;
+    const totalDiffs = s.pendingCount || 0 + (s.wasteRegisteredCount || 0) + (s.stockInNotedCount || 0) + (s.completedCount || 0);
+    const hasPending = (s.pendingCount || 0) > 0;
+    suggestionPart = `
+      <div class="diff-summary diff-suggestion-summary">
+        <span class="diff-stat ${hasPending ? 'warn' : 'ok'}">
+          差异处理：${s.pendingCount || 0}项待处理
+          ${s.wasteRegisteredCount ? ` · ${s.wasteRegisteredCount}项已创建报废单` : ''}
+          ${s.stockInNotedCount ? ` · ${s.stockInNotedCount}项已补入库备注` : ''}
+          ${s.completedCount ? ` · ${s.completedCount}项已处理完成` : ''}
+        </span>
+      </div>
+    `;
+  }
+
   return `
     <div class="stocktake-summary">
       <div class="diff-stat">账面合计：${summary.totalBook ?? '-'}　实盘合计：${summary.totalActual ?? '-'}　净差异：${netDiff >= 0 ? '+' : ''}${netDiff}</div>
       ${diffPart}
+      ${suggestionPart}
     </div>
   `;
+}
+
+function actionStatusLabel(status) {
+  const map = {
+    pending: { label: '待处理', tone: 'warn' },
+    registered: { label: '已创建报废单', tone: 'ok' },
+    completed: { label: '已处理', tone: 'ok' },
+    consistent: { label: '账实一致', tone: 'ok' }
+  };
+  return map[status] || { label: status || '-', tone: '' };
 }
 
 function renderStocktakeItemRows(stocktake) {
@@ -834,6 +863,9 @@ function renderStocktakeItemRows(stocktake) {
   const edits = state.stocktakeEdits[stocktake.id] || stocktake.items || [];
   const savedMap = {};
   (stocktake.items || []).forEach((it) => { savedMap[it.batchId] = it; });
+
+  const suggestionMap = {};
+  (stocktake.diffSuggestions || []).forEach((d) => { suggestionMap[d.batchId] = d; });
 
   let targetBatches = state.db.batches || [];
   if (stocktake.cabinetId) {
@@ -858,6 +890,9 @@ function renderStocktakeItemRows(stocktake) {
 
   if (!edits.length) return '<div class="empty">暂无待盘点批次</div>';
 
+  const canCreateWaste = canCurrentUser('create', 'wastes');
+  const canMarkNote = canCurrentUser('special', 'stocktakes-items');
+
   return edits.map((item, idx) => {
     const batch = state.db.batches.find((b) => b.id === item.batchId);
     if (!batch) return '';
@@ -868,6 +903,44 @@ function renderStocktakeItemRows(stocktake) {
     const diffHtml = `<span class="diff-cell ${rowTone}">${escapeHtml(diffLabel(diff))}</span>`;
     const canEdit = !confirmed && canCurrentUser('special', 'stocktakes-items');
     const inputAttrs = canEdit ? '' : 'readonly disabled';
+
+    const suggestion = suggestionMap[item.batchId] || item;
+    const actionStatus = confirmed ? (suggestion.actionStatus || (diff === 0 ? 'consistent' : 'pending')) : null;
+    const statusInfo = actionStatus ? actionStatusLabel(actionStatus) : null;
+
+    let actionCell = '';
+    if (confirmed && diff !== 0) {
+      const suggestionText = suggestion.suggestion || (diff > 0 ? '建议补入库备注' : '建议补登记报废');
+      let actionBtn = '';
+      if (diff < 0 && actionStatus === 'pending' && canCreateWaste) {
+        actionBtn = `<button class="ghost danger" data-create-waste-from-stocktake="${stocktake.id}" data-batch-id="${item.batchId}" style="padding:6px 10px;font-size:12px;">创建报废单草稿</button>`;
+      } else if (diff < 0 && actionStatus === 'registered' && suggestion.wasteId) {
+        const waste = (state.db.wastes || []).find((w) => w.id === suggestion.wasteId);
+        const wasteLabel = waste ? `${waste.code || waste.id}（${waste.status}）` : '已创建';
+        actionBtn = `<span class="pill ok" style="font-size:11px;">📋 ${escapeHtml(wasteLabel)}</span>`;
+      } else if (diff > 0 && actionStatus === 'pending' && canMarkNote) {
+        actionBtn = `<button class="ghost" data-mark-stocktake-note="${stocktake.id}" data-batch-id="${item.batchId}" style="padding:6px 10px;font-size:12px;">标记已补备注</button>`;
+      } else if (diff > 0 && actionStatus === 'completed') {
+        actionBtn = `<span class="pill ok" style="font-size:11px;">✓ 已补备注</span>`;
+      }
+
+      actionCell = `
+        <td class="stocktake-action-cell">
+          <div class="stocktake-suggestion">
+            <span class="meta">${escapeHtml(suggestionText)}</span>
+            ${statusInfo ? pill(statusInfo.label, statusInfo.tone) : ''}
+          </div>
+          ${actionBtn ? `<div class="stocktake-item-actions">${actionBtn}</div>` : ''}
+        </td>
+      `;
+    } else if (confirmed && diff === 0) {
+      actionCell = `<td class="stocktake-action-cell">${statusInfo ? pill(statusInfo.label, statusInfo.tone) : ''}</td>`;
+    }
+
+    const extraCol = confirmed ? '<th>差异处理建议</th>' : '';
+    const extraCellHtml = confirmed ? actionCell : '';
+    const extraHeadHtml = confirmed ? '<th>差异处理建议</th>' : '';
+
     return `
       <tr class="stocktake-row ${rowTone ? 'row-' + rowTone : ''}">
         <td>
@@ -886,6 +959,7 @@ function renderStocktakeItemRows(stocktake) {
         <td>
           <input type="text" class="st-input remark-input" data-st="${stocktake.id}" data-idx="${idx}" data-field="remark" value="${escapeHtml(item.remark || '')}" ${inputAttrs} placeholder="差异原因...">
         </td>
+        ${confirmed ? extraCellHtml : ''}
       </tr>
     `;
   }).join('');
@@ -902,6 +976,10 @@ function renderStocktakeCard(stocktake, view) {
   const canSaveItems = !confirmed && canCurrentUser('special', 'stocktakes-items');
   const canConfirm = !confirmed && canCurrentUser('special', 'stocktakes-confirm') && stocktake.items && stocktake.items.length > 0;
 
+  const headCells = confirmed
+    ? '<tr><th>药剂批次</th><th>账面数量</th><th>实盘数量</th><th>差异</th><th>备注/原因</th><th>差异处理建议</th></tr>'
+    : '<tr><th>药剂批次</th><th>账面数量</th><th>实盘数量</th><th>差异</th><th>备注/原因</th></tr>';
+
   let expandContent = '';
   if (isExpanded) {
     const actions = confirmed ? '' : `
@@ -917,7 +995,7 @@ function renderStocktakeCard(stocktake, view) {
         ${diffHtml}
         <table class="stocktake-table">
           <thead>
-            <tr><th>药剂批次</th><th>账面数量</th><th>实盘数量</th><th>差异</th><th>备注/原因</th></tr>
+            ${headCells}
           </thead>
           <tbody>
             ${renderStocktakeItemRows(stocktake)}
@@ -1124,14 +1202,31 @@ function renderWasteView(view) {
   const statusOptions = view.statusOptions || [];
   const canCreate = canCurrentUser('create', 'wastes');
   const prefill = state.wastePrefill;
-  const alertToneClass = prefill?.alertType === 'expired' ? 'expired' : prefill?.alertType === 'expiring' ? 'expiring' : '';
-  const alertLabel = prefill?.alertType === 'expired' ? '已过期批次发起报废' : prefill?.alertType === 'expiring' ? '临期批次发起报废' : '';
+  let alertToneClass = '';
+  let alertLabel = '';
+  let alertIcon = '📦';
+  if (prefill?.alertType === 'expired') {
+    alertToneClass = 'expired';
+    alertLabel = '已过期批次发起报废';
+    alertIcon = '⚠️';
+  } else if (prefill?.alertType === 'expiring') {
+    alertToneClass = 'expiring';
+    alertLabel = '临期批次发起报废';
+    alertIcon = '⏰';
+  } else if (prefill?.alertType === 'stocktake-deficit') {
+    alertToneClass = 'stocktake';
+    alertLabel = '盘点盘亏发起报废';
+    alertIcon = '🔍';
+  }
+  const extraMeta = prefill?.stocktakeInfo
+    ? `　盘点单：${escapeHtml(prefill.stocktakeInfo.stocktakeCode || prefill.stocktakeInfo.stocktakeId)}，盘亏：${prefill.stocktakeInfo.deficitQty || 0}${escapeHtml(prefill.unit || '')}`
+    : '';
   const alertBanner = prefill ? `
     <div class="waste-prefill-banner ${alertToneClass}">
-      <span class="waste-prefill-icon">${prefill.alertType === 'expired' ? '⚠️' : prefill.alertType === 'expiring' ? '⏰' : '📦'}</span>
+      <span class="waste-prefill-icon">${alertIcon}</span>
       <div class="waste-prefill-info">
         <strong>${escapeHtml(alertLabel || '发起报废申请')}</strong>
-        <span class="meta">批次：${escapeHtml(prefill.batchName || '')} / ${escapeHtml(prefill.batchNo || '')}，库存：${prefill.quantity || 0}${escapeHtml(prefill.unit || '')}，有效期：${escapeHtml(prefill.expiresAt || '未设置')}</span>
+        <span class="meta">批次：${escapeHtml(prefill.batchName || '')} / ${escapeHtml(prefill.batchNo || '')}，库存：${prefill.quantity || 0}${escapeHtml(prefill.unit || '')}，有效期：${escapeHtml(prefill.expiresAt || '未设置')}${extraMeta}</span>
       </div>
       <button type="button" class="ghost waste-prefill-clear" data-clear-waste-prefill>清除预填</button>
     </div>
@@ -1147,12 +1242,17 @@ function renderWasteView(view) {
     maxQuantity_raw: prefill.quantity || 0,
     reason: prefill.suggestedReason || '',
     applicant: state.currentUser?.name || '',
+    stocktakeId: prefill.stocktakeId || '',
     ...prefill
   } : null;
+  const stocktakeHidden = prefill?.stocktakeId
+    ? `<input type="hidden" name="stocktakeId" value="${escapeHtml(prefill.stocktakeId)}">`
+    : '';
   const createForm = canCreate ? `
     <form class="panel" data-waste-form data-create="${view.collection}" data-view="${view.id}" ${prefill ? 'data-waste-prefill="true"' : ''}>
       <h2>${escapeHtml(view.formTitle)}</h2>
       ${alertBanner}
+      ${stocktakeHidden}
       <div class="form-grid">${view.fields.map((f) => formField(f, prefillFormData)).join('')}</div>
       <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
     </form>
@@ -2194,6 +2294,50 @@ document.addEventListener('click', async (e) => {
       toast('已一键带入报废申请信息，请确认后提交');
     } catch (err) {
       toast(err.message || '获取预填充信息失败');
+    }
+    return;
+  }
+
+  const openWasteFromStocktake = e.target.closest('[data-create-waste-from-stocktake]');
+  if (openWasteFromStocktake) {
+    const stocktakeId = openWasteFromStocktake.dataset.createWasteFromStocktake;
+    const batchId = openWasteFromStocktake.dataset.batchId;
+    try {
+      const prefill = await api(`/api/batches/${batchId}/waste-prefill?stocktakeId=${encodeURIComponent(stocktakeId)}`);
+      state.wastePrefill = prefill;
+      state.activeView = 'wastes';
+      state.activeTab = 'wastes';
+      render();
+      setTimeout(() => {
+        const form = document.querySelector('[data-waste-form]');
+        if (form) {
+          form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          form.classList.add('waste-form-highlight');
+          setTimeout(() => form.classList.remove('waste-form-highlight'), 2500);
+        }
+      }, 100);
+      toast('已带入盘点盘亏报废信息，请确认后提交（提交后将自动在盘点单记录已处理）');
+    } catch (err) {
+      toast(err.message || '获取预填充信息失败');
+    }
+    return;
+  }
+
+  const markStocktakeNote = e.target.closest('[data-mark-stocktake-note]');
+  if (markStocktakeNote) {
+    const stocktakeId = markStocktakeNote.dataset.markStocktakeNote;
+    const batchId = markStocktakeNote.dataset.batchId;
+    if (!confirm('确认已对该盘盈批次补入库备注吗？')) return;
+    try {
+      const updated = await api(`/api/stocktakes/${stocktakeId}/mark-note/${batchId}`, { method: 'POST' });
+      state.db.stocktakes = state.db.stocktakes.map((s) => (s.id === updated.id ? updated : s));
+      if (state.db.auditLogs && updated.auditLogs) {
+        state.db.auditLogs = updated.auditLogs.concat(state.db.auditLogs.filter((l) => !(l.collection === 'stocktakes' && l.targetId === stocktakeId)));
+      }
+      render();
+      toast('已标记盘盈已补入库备注');
+    } catch (err) {
+      toast(err.message || '标记失败');
     }
     return;
   }

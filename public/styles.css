@@ -505,6 +505,43 @@ main {
   border-top: 1px dashed var(--line);
 }
 
+.stocktake-action-cell {
+  min-width: 200px;
+  vertical-align: top;
+}
+
+.stocktake-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stocktake-suggestion .pill {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.stocktake-item-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.diff-suggestion-summary {
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  margin-top: 2px;
+}
+
+.diff-stat.warn {
+  color: var(--warn);
+}
+
+.diff-stat.ok {
+  color: var(--ok);
+}
+
 @media (max-width: 820px) {
   .stocktake-table,
   .stocktake-table thead,
@@ -921,6 +958,11 @@ main {
 .waste-prefill-banner.expiring {
   background: rgba(163, 92, 0, 0.08);
   border-left-color: var(--warn);
+}
+
+.waste-prefill-banner.stocktake {
+  background: rgba(89, 61, 142, 0.08);
+  border-left-color: #6d5ab8;
 }
 
 .waste-prefill-icon {

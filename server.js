@@ -173,16 +173,54 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
     if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
     if (wasteQty > stockQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过当前库存(${stockQty})` });
     if (wasteQty > availableQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过可用库存(${availableQty})，有${reservedQty}已被调度预占，请先关闭相关调度单` });
+    const stocktakeId = req.body.stocktakeId || null;
+    const sourceLabel = stocktakeId ? '（盘点盘亏发起）' : '';
     item = {
       id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
       ...req.body,
       status: '待审批',
       actualQuantity: 0,
+      stocktakeId: stocktakeId,
       createdAt: now,
       updatedAt: now,
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
-      history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`, operator)]
+      history: [stamp('创建申请' + sourceLabel, `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}`, operator)]
     };
+
+    if (stocktakeId) {
+      const stocktake = db.stocktakes?.find((s) => s.id === stocktakeId);
+      if (stocktake) {
+        if (stocktake.diffSuggestions) {
+          const diffItem = stocktake.diffSuggestions.find((d) => d.batchId === req.body.batchId);
+          if (diffItem) {
+            diffItem.actionStatus = 'registered';
+            diffItem.wasteId = item.id;
+          }
+        }
+        if (stocktake.items) {
+          const stocktakeItem = stocktake.items.find((i) => i.batchId === req.body.batchId);
+          if (stocktakeItem) {
+            stocktakeItem.actionStatus = 'registered';
+            stocktakeItem.wasteId = item.id;
+          }
+        }
+        if (stocktake.suggestionSummary) {
+          stocktake.suggestionSummary.wasteRegisteredCount = (stocktake.suggestionSummary.wasteRegisteredCount || 0) + 1;
+          stocktake.suggestionSummary.pendingCount = Math.max(0, (stocktake.suggestionSummary.pendingCount || 0) - 1);
+        }
+        stocktake.updatedAt = now;
+        stocktake.history = stocktake.history || [];
+        stocktake.history.unshift(stamp('差异处理', `盘亏批次「${batch.name} / ${batch.batchNo}」已创建报废单草稿，报废单：${item.code || item.id}`, operator));
+        writeAuditLog(db, {
+          actionType: '盘点差异处理',
+          collection: 'stocktakes',
+          targetId: stocktake.id,
+          targetItem: stocktake,
+          note: `盘亏批次「${batch.name} / ${batch.batchNo}」已创建报废单草稿`,
+          operator
+        });
+      }
+    }
   } else if (collection === 'requests') {
     const batch = db.batches.find((b) => b.id === req.body.batchId);
     if (!batch) return res.status(409).json({ error: '批次不存在' });
@@ -552,6 +590,7 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
   let deficitCount = 0;
   let surplusQty = 0;
   let deficitQty = 0;
+  const diffItems = [];
 
   for (const item of stocktake.items) {
     const batch = db.batches.find((b) => b.id === item.batchId);
@@ -572,6 +611,31 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
       const remarkText = item.remark ? `，原因：${item.remark}` : '';
       batch.history.unshift(stamp('盘点调整', `${diffText}，盘点单：${stocktake.code || stocktake.id}${remarkText}`, operator));
 
+      const diffType = diff > 0 ? 'surplus' : 'deficit';
+      const suggestion = diff > 0
+        ? { type: 'surplus', label: '盘盈', suggestion: '建议补入库备注', needAction: 'stockInNote', actionStatus: 'pending' }
+        : { type: 'deficit', label: '盘亏', suggestion: '建议补登记报废', needAction: 'wasteRegistration', actionStatus: 'pending' };
+
+      const diffItem = {
+        batchId: item.batchId,
+        batchName: batch.name,
+        batchNo: batch.batchNo,
+        unit: batch.unit || '',
+        bookQuantity: book,
+        actualQuantity: actual,
+        difference: diff,
+        diffType,
+        suggestion: suggestion.suggestion,
+        needAction: suggestion.needAction,
+        actionStatus: suggestion.actionStatus,
+        remark: item.remark || '',
+        wasteId: null
+      };
+      diffItems.push(diffItem);
+      item.suggestion = suggestion.suggestion;
+      item.needAction = suggestion.needAction;
+      item.actionStatus = suggestion.actionStatus;
+
       if (diff > 0) {
         surplusCount++;
         surplusQty += diff;
@@ -579,6 +643,8 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
         deficitCount++;
         deficitQty += Math.abs(diff);
       }
+    } else {
+      item.actionStatus = 'consistent';
     }
   }
 
@@ -590,6 +656,18 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
     surplusQty,
     deficitQty
   };
+
+  const suggestionSummary = {
+    needWasteRegistration: deficitCount,
+    needStockInNote: surplusCount,
+    pendingCount: diffCount,
+    completedCount: 0,
+    wasteRegisteredCount: 0,
+    stockInNotedCount: 0
+  };
+  stocktake.diffSuggestions = diffItems;
+  stocktake.suggestionSummary = suggestionSummary;
+
   stocktake.status = '已确认';
   stocktake.confirmedAt = now;
   stocktake.confirmedBy = confirmedBy;
@@ -599,8 +677,8 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
 
   const noteParts = [];
   noteParts.push(`差异项${diffCount}项`);
-  if (surplusCount) noteParts.push(`盘盈${surplusCount}项(+${surplusQty})`);
-  if (deficitCount) noteParts.push(`盘亏${deficitCount}项(-${deficitQty})`);
+  if (surplusCount) noteParts.push(`盘盈${surplusCount}项(+${surplusQty})，建议补入库备注`);
+  if (deficitCount) noteParts.push(`盘亏${deficitCount}项(-${deficitQty})，建议补登记报废`);
   noteParts.push('已同步更新批次库存');
   stocktake.history.unshift(stamp('确认', noteParts.join('，'), operator));
 
@@ -1740,28 +1818,52 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
   if (!batch) return res.status(404).json({ error: '批次不存在' });
   if (batch.status === '已报废') return res.status(409).json({ error: '该批次已报废' });
 
-  const now = new Date();
-  const expiringDays = config.alerts?.expiringDays || 30;
-  const expireDate = batch.expiresAt ? new Date(batch.expiresAt) : null;
+  const stocktakeId = req.query.stocktakeId || null;
+  let stocktakeInfo = null;
+  let deficitQty = 0;
   let alertType = 'normal';
   let reasonPrefix = '';
 
-  if (expireDate) {
-    if (expireDate < now) {
-      alertType = 'expired';
-      const daysExpired = Math.ceil((now - expireDate) / (1000 * 60 * 60 * 24));
-      reasonPrefix = `已过期${daysExpired}天`;
-    } else {
-      const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
-      if (daysLeft <= expiringDays) {
-        alertType = 'expiring';
-        reasonPrefix = `临期（还有${daysLeft}天过期）`;
-      } else {
-        reasonPrefix = '库存批次';
+  if (stocktakeId) {
+    const stocktake = db.stocktakes?.find((s) => s.id === stocktakeId);
+    if (stocktake) {
+      const diffItem = (stocktake.diffSuggestions || []).find((d) => d.batchId === batch.id);
+      if (diffItem) {
+        deficitQty = Math.abs(diffItem.difference || 0);
+        stocktakeInfo = {
+          stocktakeId: stocktake.id,
+          stocktakeCode: stocktake.code || '',
+          stocktakeTitle: stocktake.title || '',
+          deficitQty
+        };
+        alertType = 'stocktake-deficit';
+        reasonPrefix = `盘点盘亏${deficitQty}${batch.unit || ''}`;
       }
     }
-  } else {
-    reasonPrefix = '库存批次';
+  }
+
+  if (!stocktakeInfo) {
+    const now = new Date();
+    const expiringDays = config.alerts?.expiringDays || 30;
+    const expireDate = batch.expiresAt ? new Date(batch.expiresAt) : null;
+
+    if (expireDate) {
+      if (expireDate < now) {
+        alertType = 'expired';
+        const daysExpired = Math.ceil((now - expireDate) / (1000 * 60 * 60 * 24));
+        reasonPrefix = `已过期${daysExpired}天`;
+      } else {
+        const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+        if (daysLeft <= expiringDays) {
+          alertType = 'expiring';
+          reasonPrefix = `临期（还有${daysLeft}天过期）`;
+        } else {
+          reasonPrefix = '库存批次';
+        }
+      }
+    } else {
+      reasonPrefix = '库存批次';
+    }
   }
 
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -1770,11 +1872,20 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
   const suggestedCode = `BF${todayStr}${seqNum}`;
 
   const batchTitle = [batch.name, batch.batchNo].filter(Boolean).join(' / ');
-  const suggestedTitle = `【${reasonPrefix}】${batchTitle}报废申请`;
-  const suggestedReason = `${reasonPrefix}，建议报废。批次：${batch.batchNo}，品名：${batch.name}，规格：${batch.quantity || 0}${batch.unit || ''}，有效期：${batch.expiresAt || '未设置'}。`;
+  const suggestedTitle = stocktakeInfo
+    ? `【盘点盘亏】${stocktakeInfo.stocktakeCode || stocktake.id} - ${batchTitle}报废申请`
+    : `【${reasonPrefix}】${batchTitle}报废申请`;
+  const stocktakeNote = stocktakeInfo
+    ? `盘点单：${stocktakeInfo.stocktakeCode || stocktakeInfo.stocktakeId}${stocktakeInfo.stocktakeTitle ? '（' + stocktakeInfo.stocktakeTitle + '）' : ''}，盘亏数量：${deficitQty}${batch.unit || ''}。`
+    : '';
+  const suggestedReason = stocktakeInfo
+    ? `${reasonPrefix}，建议补登记报废。${stocktakeNote}批次：${batch.batchNo}，品名：${batch.name}，当前库存：${batch.quantity || 0}${batch.unit || ''}，有效期：${batch.expiresAt || '未设置'}。`
+    : `${reasonPrefix}，建议报废。批次：${batch.batchNo}，品名：${batch.name}，规格：${batch.quantity || 0}${batch.unit || ''}，有效期：${batch.expiresAt || '未设置'}。`;
 
   const supplier = db.suppliers?.find((s) => s.id === batch.supplierId);
   const cabinet = db.cabinets?.find((c) => c.id === batch.cabinetId);
+
+  const prefQty = deficitQty > 0 ? deficitQty : getBatchAvailableQuantity(batch);
 
   res.json({
     batchId: batch.id,
@@ -1782,7 +1893,7 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
     batchNo: batch.batchNo,
     category: batch.category || '',
     safetyLevel: batch.safetyLevel || '',
-    quantity: Number(batch.quantity || 0),
+    quantity: prefQty,
     unit: batch.unit || '',
     expiresAt: batch.expiresAt || '',
     status: batch.status || '',
@@ -1795,11 +1906,69 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
     suggestedCode,
     suggestedTitle,
     suggestedReason,
-    quantity: Number(batch.quantity || 0),
+    stocktakeId: stocktakeId,
+    stocktakeInfo,
     reservedQuantity: Number(batch.reservedQuantity || 0),
     availableQuantity: getBatchAvailableQuantity(batch),
     maxQuantity: getBatchAvailableQuantity(batch)
   });
+});
+
+app.post('/api/stocktakes/:stocktakeId/mark-note/:batchId', requireUser, async (req, res) => {
+  if (!checkPermission(req.currentUser, 'special', 'stocktakes-items', res)) return;
+
+  const db = await readDb();
+  const { stocktakeId, batchId } = req.params;
+  const stocktake = db.stocktakes?.find((s) => s.id === stocktakeId);
+  if (!stocktake) return res.status(404).json({ error: '盘点单不存在' });
+  if (stocktake.status !== '已确认') return res.status(409).json({ error: '只有已确认的盘点单可以标记差异处理' });
+
+  const operator = req.currentUser;
+  const now = new Date().toISOString();
+  const batch = db.batches?.find((b) => b.id === batchId);
+  if (!batch) return res.status(404).json({ error: '批次不存在' });
+
+  let updated = false;
+  if (stocktake.diffSuggestions) {
+    const diffItem = stocktake.diffSuggestions.find((d) => d.batchId === batchId);
+    if (diffItem && diffItem.needAction === 'stockInNote' && diffItem.actionStatus === 'pending') {
+      diffItem.actionStatus = 'completed';
+      updated = true;
+    }
+  }
+  if (stocktake.items) {
+    const stocktakeItem = stocktake.items.find((i) => i.batchId === batchId);
+    if (stocktakeItem && stocktakeItem.needAction === 'stockInNote' && stocktakeItem.actionStatus === 'pending') {
+      stocktakeItem.actionStatus = 'completed';
+      updated = true;
+    }
+  }
+
+  if (!updated) {
+    return res.status(409).json({ error: '该批次无需标记或已处理' });
+  }
+
+  if (stocktake.suggestionSummary) {
+    stocktake.suggestionSummary.stockInNotedCount = (stocktake.suggestionSummary.stockInNotedCount || 0) + 1;
+    stocktake.suggestionSummary.pendingCount = Math.max(0, (stocktake.suggestionSummary.pendingCount || 0) - 1);
+    stocktake.suggestionSummary.completedCount = (stocktake.suggestionSummary.completedCount || 0) + 1;
+  }
+
+  stocktake.updatedAt = now;
+  stocktake.history = stocktake.history || [];
+  stocktake.history.unshift(stamp('差异处理', `盘盈批次「${batch.name} / ${batch.batchNo}」已补入库备注`, operator));
+
+  writeAuditLog(db, {
+    actionType: '盘点差异处理',
+    collection: 'stocktakes',
+    targetId: stocktake.id,
+    targetItem: stocktake,
+    note: `盘盈批次「${batch.name} / ${batch.batchNo}」已补入库备注`,
+    operator
+  });
+
+  await writeDb(db);
+  res.json(stocktake);
 });
 
 app.get('/api/batches/availability', async (req, res) => {
