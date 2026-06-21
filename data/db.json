@@ -60,50 +60,14 @@
       "batchNo": "PY-A17-2605",
       "cabinetId": "cabinet-seed-1",
       "safetyLevel": "高",
-      "quantity": 14,
+      "quantity": 10,
       "unit": "罐",
       "expiresAt": "2026-10-30",
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-06-16T09:00:00.000Z",
-      "updatedAt": "2026-06-21T03:29:33.540Z",
+      "updatedAt": "2026-06-20T10:18:28.118Z",
       "history": [
-        {
-          "at": "2026-06-21T03:29:33.536Z",
-          "action": "出库",
-          "note": "数量调整",
-          "operator": {
-            "id": "user-staff-1",
-            "name": "张伟",
-            "role": "librarian",
-            "roleLabel": "库管员"
-          },
-          "operatorLabel": "张伟（库管员）"
-        },
-        {
-          "at": "2026-06-21T03:24:58.647Z",
-          "action": "出库",
-          "note": "数量调整",
-          "operator": {
-            "id": "user-staff-1",
-            "name": "张伟",
-            "role": "librarian",
-            "roleLabel": "库管员"
-          },
-          "operatorLabel": "张伟（库管员）"
-        },
-        {
-          "at": "2026-06-21T02:55:52.087Z",
-          "action": "预占库存",
-          "note": "调度单：TEST-RESERVE-001，预占：+5罐，累计预占：5罐，可用：9罐",
-          "operator": {
-            "id": "user-safety-1",
-            "name": "李强",
-            "role": "safety",
-            "roleLabel": "安全负责人"
-          },
-          "operatorLabel": "李强（安全负责人）"
-        },
         {
           "at": "2026-06-20T10:18:28.118Z",
           "action": "出库",
@@ -130,20 +94,8 @@
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-05-20T10:00:00.000Z",
-      "updatedAt": "2026-06-21T02:55:52.087Z",
+      "updatedAt": "2026-05-20T10:00:00.000Z",
       "history": [
-        {
-          "at": "2026-06-21T02:55:52.087Z",
-          "action": "预占库存",
-          "note": "调度单：TEST-RESERVE-001，预占：+3发，累计预占：3发，可用：22发",
-          "operator": {
-            "id": "user-safety-1",
-            "name": "李强",
-            "role": "safety",
-            "roleLabel": "安全负责人"
-          },
-          "operatorLabel": "李强（安全负责人）"
-        },
         {
           "at": "2026-05-20T10:00:00.000Z",
           "action": "创建",
@@ -165,32 +117,8 @@
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-05-25T14:00:00.000Z",
-      "updatedAt": "2026-06-21T02:56:27.874Z",
+      "updatedAt": "2026-06-20T07:35:10.519Z",
       "history": [
-        {
-          "at": "2026-06-21T02:56:27.874Z",
-          "action": "释放预占",
-          "note": "调度单：TEST-DEL-001，释放：-5支，原因：删除调度单，剩余预占：0支，可用：36支",
-          "operator": {
-            "id": "user-show-1",
-            "name": "王芳",
-            "role": "show",
-            "roleLabel": "演出负责人"
-          },
-          "operatorLabel": "王芳（演出负责人）"
-        },
-        {
-          "at": "2026-06-21T02:56:27.872Z",
-          "action": "预占库存",
-          "note": "调度单：TEST-DEL-001，预占：+5支，累计预占：5支，可用：31支",
-          "operator": {
-            "id": "user-safety-1",
-            "name": "李强",
-            "role": "safety",
-            "roleLabel": "安全负责人"
-          },
-          "operatorLabel": "李强（安全负责人）"
-        },
         {
           "at": "2026-06-20T07:35:10.519Z",
           "action": "盘点调整",
@@ -245,32 +173,8 @@
       "supplierId": "supplier-seed-1",
       "status": "可用",
       "createdAt": "2026-05-01T11:00:00.000Z",
-      "updatedAt": "2026-06-21T02:55:52.094Z",
+      "updatedAt": "2026-06-20T07:35:10.519Z",
       "history": [
-        {
-          "at": "2026-06-21T02:55:52.094Z",
-          "action": "释放预占",
-          "note": "调度单：TEST-RESERVE-003，释放：-2根，原因：调度驳回，剩余预占：0根，可用：122根",
-          "operator": {
-            "id": "user-safety-1",
-            "name": "李强",
-            "role": "safety",
-            "roleLabel": "安全负责人"
-          },
-          "operatorLabel": "李强（安全负责人）"
-        },
-        {
-          "at": "2026-06-21T02:55:52.092Z",
-          "action": "预占库存",
-          "note": "调度单：TEST-RESERVE-003，预占：+2根，累计预占：2根，可用：120根",
-          "operator": {
-            "id": "user-safety-1",
-            "name": "李强",
-            "role": "safety",
-            "roleLabel": "安全负责人"
-          },
-          "operatorLabel": "李强（安全负责人）"
-        },
         {
           "at": "2026-06-20T07:35:10.519Z",
           "action": "盘点调整",
@@ -418,7 +322,66 @@
       "reservedQuantity": 0
     }
   ],
-  "requests": [],
+  "requests": [
+    {
+      "id": "request-seed-1",
+      "batchId": "batch-seed-1",
+      "projectId": "project-seed-1",
+      "showName": "海港音乐节开场",
+      "venue": "南岸露天剧场",
+      "useWindow": "2026-07-11 19:30-19:45",
+      "operator": "许川",
+      "quantity": 4,
+      "safetyLevel": "高",
+      "status": "已出库",
+      "memo": "仅用于舞台前沿两侧喷点",
+      "returned": 0,
+      "wasted": 0,
+      "createdAt": "2026-06-18T12:00:00.000Z",
+      "updatedAt": "2026-06-20T10:18:28.117Z",
+      "history": [
+        {
+          "at": "2026-06-20T10:18:28.117Z",
+          "action": "出库",
+          "note": "状态流转"
+        },
+        {
+          "at": "2026-06-18T12:00:00.000Z",
+          "action": "创建",
+          "note": "提交演出领用申请"
+        }
+      ]
+    },
+    {
+      "id": "request-alert-1",
+      "batchId": "batch-alert-4",
+      "projectId": "project-seed-2",
+      "showName": "城市夏夜嘉年华",
+      "venue": "中央广场主舞台",
+      "useWindow": "2026-08-15 20:00-20:30",
+      "operator": "林小雨",
+      "quantity": 6,
+      "safetyLevel": "高",
+      "status": "已审批",
+      "memo": "开幕式高空礼花",
+      "returned": 0,
+      "wasted": 0,
+      "createdAt": "2026-06-12T14:30:00.000Z",
+      "updatedAt": "2026-06-13T10:00:00.000Z",
+      "history": [
+        {
+          "at": "2026-06-13T10:00:00.000Z",
+          "action": "已审批",
+          "note": "审批通过，待出库"
+        },
+        {
+          "at": "2026-06-12T14:30:00.000Z",
+          "action": "创建",
+          "note": "提交演出领用申请"
+        }
+      ]
+    }
+  ],
   "projects": [
     {
       "id": "project-seed-1",
@@ -890,125 +853,6 @@
       "createdAt": "2026-06-21T02:17:18.617Z"
     },
     {
-      "id": "auditLogs-1781960094304-2d367",
-      "actionType": "创建",
-      "targetCollection": "batches",
-      "targetId": "batches-1781960094304-2b039",
-      "targetLabel": "测试烟火B / TEST-B002",
-      "changes": {
-        "id": {
-          "after": "batches-1781960094304-2b039"
-        },
-        "name": {
-          "after": "测试烟火B"
-        },
-        "category": {
-          "after": "测试B"
-        },
-        "batchNo": {
-          "after": "TEST-B002"
-        },
-        "safetyLevel": {
-          "after": "低"
-        },
-        "quantity": {
-          "after": 30
-        },
-        "unit": {
-          "after": "罐"
-        },
-        "expiresAt": {
-          "after": "2026-12-31"
-        },
-        "status": {
-          "after": "可用"
-        },
-        "createdAt": {
-          "after": "2026-06-20T12:54:54.304Z"
-        },
-        "updatedAt": {
-          "after": "2026-06-20T12:54:54.304Z"
-        },
-        "createdBy": {
-          "after": {
-            "id": "user-staff-1",
-            "name": "张伟",
-            "role": "librarian",
-            "roleLabel": "库管员"
-          }
-        },
-        "history": {
-          "after": [
-            {
-              "at": "2026-06-20T12:54:54.304Z",
-              "action": "创建",
-              "note": "",
-              "operator": {
-                "id": "user-staff-1",
-                "name": "张伟",
-                "role": "librarian",
-                "roleLabel": "库管员"
-              },
-              "operatorLabel": "张伟（库管员）"
-            }
-          ]
-        }
-      },
-      "note": "",
-      "operator": "张伟（库管员）",
-      "operatorInfo": {
-        "id": "user-staff-1",
-        "username": "librarian",
-        "name": "张伟",
-        "role": "librarian",
-        "roleLabel": "库管员"
-      },
-      "createdAt": "2026-06-20T12:54:54.305Z"
-    },
-    {
-      "id": "auditLogs-seed-1",
-      "actionType": "创建",
-      "targetCollection": "batches",
-      "targetId": "batch-seed-1",
-      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
-      "changes": null,
-      "note": "入库18罐",
-      "operator": "系统",
-      "createdAt": "2026-06-16T09:00:00.000Z"
-    },
-    {
-      "id": "auditLogs-seed-3",
-      "actionType": "锁定",
-      "targetCollection": "batches",
-      "targetId": "batch-alert-4",
-      "targetLabel": "高空礼花弹G12 / LH-G12-2510",
-      "changes": {
-        "status": {
-          "before": "可用",
-          "after": "锁定"
-        }
-      },
-      "note": "待质量复检",
-      "operator": "系统",
-      "createdAt": "2026-06-15T08:00:00.000Z"
-    },
-    {
-      "id": "auditLogs-seed-4",
-      "actionType": "审批通过",
-      "targetCollection": "wastes",
-      "targetId": "wastes-1781946541870-22b51",
-      "targetLabel": "BF-2026-001 / 过期药剂集中报废",
-      "changes": {
-        "status": {
-          "before": "待审批",
-          "after": "待处置"
-        }
-      },
-      "note": "审批人：王主任，报废数量：5支",
-      "operator": "王主任",
-      "createdAt": "2026-06-20T09:09:21.532Z"
-    },
-    {
       "id": "auditLogs-seed-5",
       "actionType": "确认处置",
       "targetCollection": "wastes",
@@ -1045,6 +889,44 @@
       "createdAt": "2026-06-20T09:09:42.087Z"
     },
     {
+      "id": "auditLogs-seed-4",
+      "actionType": "审批通过",
+      "targetCollection": "wastes",
+      "targetId": "wastes-1781946541870-22b51",
+      "targetLabel": "BF-2026-001 / 过期药剂集中报废",
+      "changes": {
+        "status": {
+          "before": "待审批",
+          "after": "待处置"
+        }
+      },
+      "note": "审批人：王主任，报废数量：5支",
+      "operator": "王主任",
+      "createdAt": "2026-06-20T09:09:21.532Z"
+    },
+    {
+      "id": "auditLogs-seed-2",
+      "actionType": "创建",
+      "targetCollection": "requests",
+      "targetId": "request-seed-1",
+      "targetLabel": "海港音乐节开场 / 南岸露天剧场",
+      "changes": null,
+      "note": "提交演出领用申请",
+      "operator": "许川",
+      "createdAt": "2026-06-18T12:00:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-1",
+      "actionType": "创建",
+      "targetCollection": "batches",
+      "targetId": "batch-seed-1",
+      "targetLabel": "冷焰火粉A17 / PY-A17-2605",
+      "changes": null,
+      "note": "入库18罐",
+      "operator": "系统",
+      "createdAt": "2026-06-16T09:00:00.000Z"
+    },
+    {
       "id": "auditLogs-seed-7",
       "actionType": "盘点确认",
       "targetCollection": "stocktakes",
@@ -1059,6 +941,38 @@
       "note": "差异项2项，盘盈1项(+3发)，盘亏1项(-2罐)，已同步更新批次库存",
       "operator": "张伟",
       "createdAt": "2026-06-15T10:30:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-3",
+      "actionType": "锁定",
+      "targetCollection": "batches",
+      "targetId": "batch-alert-4",
+      "targetLabel": "高空礼花弹G12 / LH-G12-2510",
+      "changes": {
+        "status": {
+          "before": "可用",
+          "after": "锁定"
+        }
+      },
+      "note": "待质量复检",
+      "operator": "系统",
+      "createdAt": "2026-06-15T08:00:00.000Z"
+    },
+    {
+      "id": "auditLogs-seed-9",
+      "actionType": "出库",
+      "targetCollection": "requests",
+      "targetId": "request-alert-1",
+      "targetLabel": "城市夏夜嘉年华 / 中央广场主舞台",
+      "changes": {
+        "status": {
+          "before": "已审批",
+          "after": "已出库"
+        }
+      },
+      "note": "状态流转",
+      "operator": "系统",
+      "createdAt": "2026-06-14T09:30:00.000Z"
     },
     {
       "id": "auditLogs-seed-8",
