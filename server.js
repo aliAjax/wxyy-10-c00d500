@@ -168,8 +168,11 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
     if (batch.status === '已报废') return res.status(409).json({ error: '该批次已报废，无法创建报废单' });
     const wasteQty = Number(req.body.quantity || 0);
     const stockQty = Number(batch.quantity || 0);
+    const reservedQty = Number(batch.reservedQuantity || 0);
+    const availableQty = Math.max(0, stockQty - reservedQty);
     if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
     if (wasteQty > stockQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过当前库存(${stockQty})` });
+    if (wasteQty > availableQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过可用库存(${availableQty})，有${reservedQty}已被调度预占，请先关闭相关调度单` });
     item = {
       id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
       ...req.body,
@@ -248,8 +251,11 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
       if (!batch) return res.status(409).json({ error: '批次不存在' });
       const newQty = Number(req.body.quantity || 0);
       const stockQty = Number(batch.quantity || 0);
+      const reservedQty = Number(batch.reservedQuantity || 0);
+      const availableQty = Math.max(0, stockQty - reservedQty);
       if (newQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
       if (newQty > stockQty) return res.status(409).json({ error: `报废数量(${newQty})超过当前库存(${stockQty})` });
+      if (newQty > availableQty) return res.status(409).json({ error: `报废数量(${newQty})超过可用库存(${availableQty})，有${reservedQty}已被调度预占，请先关闭相关调度单` });
     }
   }
 
@@ -345,6 +351,17 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
   const result = runAction(db, action, item, operator);
   if (result.error) return res.status(409).json({ error: result.error });
 
+  let extraBatchSnapshots = {};
+  if (action.id === 'schedule-reject' && action.collection === 'schedules') {
+    const nowStr = new Date().toISOString();
+    extraBatchSnapshots = releaseScheduleBatches(db, item, operator, nowStr, '调度驳回');
+    item.history = item.history || [];
+    const released = Object.values(extraBatchSnapshots).length;
+    if (released > 0) {
+      item.history.unshift(stamp('释放预占', `调度驳回，释放相关批次预占库存`, operator));
+    }
+  }
+
   writeAuditLog(db, {
     actionType: action.label,
     collection: action.collection,
@@ -353,6 +370,20 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
     beforeItem,
     note: action.note || '状态流转',
     operator
+  });
+
+  Object.entries(extraBatchSnapshots).forEach(([batchId, beforeBatch]) => {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    writeAuditLog(db, {
+      actionType: '释放预占',
+      collection: 'batches',
+      targetId: batch.id,
+      targetItem: batch,
+      beforeItem: beforeBatch,
+      note: `调度单：${item.code || item.id}，原因：调度驳回`,
+      operator
+    });
   });
 
   if (action.relation && relatedItem && beforeRelated) {
@@ -383,6 +414,18 @@ function preActionCheck(db, action, item) {
     }
     if (action.id === 'batch-waste' && Number(item.quantity || 0) > 0) {
       return { error: '该批次还有库存，请通过报废单流程完成报废处置' };
+    }
+  }
+  if (action.id === 'request-issue' && action.collection === 'requests') {
+    const batch = db.batches?.find((b) => b.id === item.batchId);
+    if (batch) {
+      const stockQty = Number(batch.quantity || 0);
+      const reservedQty = Number(batch.reservedQuantity || 0);
+      const available = Math.max(0, stockQty - reservedQty);
+      const reqQty = Number(item.quantity || 0);
+      if (reqQty > available) {
+        return { error: `批次「${batch.name}/${batch.batchNo}」可用${available}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${reqQty}${batch.unit || ''}，请先关闭相关调度单` };
+      }
     }
   }
   return {};
@@ -547,8 +590,11 @@ app.post('/api/wastes/:id/approve', requireUser, async (req, res) => {
 
   const wasteQty = Number(waste.quantity || 0);
   const stockQty = Number(batch.quantity || 0);
+  const reservedQty = Number(batch.reservedQuantity || 0);
+  const availableQty = Math.max(0, stockQty - reservedQty);
   if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
   if (wasteQty > stockQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过当前库存(${stockQty})` });
+  if (wasteQty > availableQty) return res.status(409).json({ error: `报废数量(${wasteQty})超过可用库存(${availableQty})，有${reservedQty}已被调度预占，请先关闭相关调度单` });
 
   const operator = req.currentUser;
   const now = new Date().toISOString();
@@ -614,9 +660,12 @@ app.post('/api/wastes/:id/dispose', requireUser, async (req, res) => {
 
   const wasteQty = Number(waste.quantity || 0);
   const stockQty = Number(batch.quantity || 0);
+  const reservedQty = Number(batch.reservedQuantity || 0);
+  const availableQty = Math.max(0, stockQty - reservedQty);
   if (actualQty <= 0) return res.status(409).json({ error: '实际处置数量必须大于0' });
   if (actualQty > wasteQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过申请数量(${wasteQty})` });
   if (actualQty > stockQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过当前库存(${stockQty})` });
+  if (actualQty > availableQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过可用库存(${availableQty})，有${reservedQty}已被调度预占` });
 
   const now = new Date().toISOString();
 
@@ -1119,15 +1168,84 @@ app.get('/api/cabinets/:id/occupancy', async (req, res) => {
 
 const LEVEL_RANK = { '低': 1, '中': 2, '高': 3 };
 
-function validateScheduleItems(db, items) {
+function getBatchAvailableQuantity(batch) {
+  const qty = Number(batch.quantity || 0);
+  const reserved = Number(batch.reservedQuantity || 0);
+  return Math.max(0, qty - reserved);
+}
+
+function aggregateBatchReservedByOthers(db, batchId, excludeScheduleId) {
+  let reservedByOthers = 0;
+  (db.schedules || []).forEach(s => {
+    if (s.id === excludeScheduleId) return;
+    if (!['调度已审批', '调度已出库'].includes(s.status)) return;
+    (s.items || []).forEach(it => {
+      if (it.batchId === batchId) {
+        reservedByOthers += Number(it.reservedQuantity || 0);
+      }
+    });
+  });
+  return reservedByOthers;
+}
+
+function reserveScheduleBatches(db, schedule, operator, nowStr) {
+  const results = { success: true, errors: [], batchSnapshots: {} };
+  const batchReqMap = {};
+  (schedule.items || []).forEach(item => {
+    batchReqMap[item.batchId] = (batchReqMap[item.batchId] || 0) + Number(item.quantity || 0);
+  });
+  for (const [batchId, reqQty] of Object.entries(batchReqMap)) {
+    const batch = db.batches.find(b => b.id === batchId);
+    if (!batch) { results.errors.push(`批次[${batchId}]不存在`); continue; }
+    results.batchSnapshots[batchId] = JSON.parse(JSON.stringify(batch));
+    const reservedByOthers = aggregateBatchReservedByOthers(db, batchId, schedule.id);
+    const theoreticalReserved = reservedByOthers + reqQty;
+    const stockQty = Number(batch.quantity || 0);
+    if (theoreticalReserved > stockQty) {
+      const avail = Math.max(0, stockQty - reservedByOthers);
+      results.errors.push(`批次「${batch.name}/${batch.batchNo}」可用库存${avail}${batch.unit || ''}（库存${stockQty}，其他调度单已预占${reservedByOthers}），本次申请${reqQty}，超出${reqQty - avail}`);
+    }
+  }
+  if (results.errors.length) { results.success = false; return results; }
+  (schedule.items || []).forEach(item => {
+    const batch = db.batches.find(b => b.id === item.batchId);
+    if (!batch) return;
+    const qty = Number(item.quantity || 0);
+    item.reservedQuantity = qty;
+    batch.reservedQuantity = Number(batch.reservedQuantity || 0) + qty;
+    batch.updatedAt = nowStr;
+    batch.history = batch.history || [];
+    batch.history.unshift(stamp('预占库存', `调度单：${schedule.code}，预占：+${qty}${batch.unit || ''}，累计预占：${batch.reservedQuantity}${batch.unit || ''}，可用：${getBatchAvailableQuantity(batch)}${batch.unit || ''}`, operator));
+  });
+  return results;
+}
+
+function releaseScheduleBatches(db, schedule, operator, nowStr, reason) {
+  const batchSnapshots = {};
+  (schedule.items || []).forEach(item => {
+    const batch = db.batches.find(b => b.id === item.batchId);
+    if (!batch) return;
+    const toRelease = Number(item.reservedQuantity || 0);
+    if (toRelease <= 0) return;
+    batchSnapshots[batch.id] = batchSnapshots[batch.id] || JSON.parse(JSON.stringify(batch));
+    batch.reservedQuantity = Math.max(0, Number(batch.reservedQuantity || 0) - toRelease);
+    item.reservedQuantity = 0;
+    batch.updatedAt = nowStr;
+    batch.history = batch.history || [];
+    batch.history.unshift(stamp('释放预占', `调度单：${schedule.code}，释放：-${toRelease}${batch.unit || ''}${reason ? '，原因：' + reason : ''}，剩余预占：${batch.reservedQuantity}${batch.unit || ''}，可用：${getBatchAvailableQuantity(batch)}${batch.unit || ''}`, operator));
+  });
+  return batchSnapshots;
+}
+
+
+function validateScheduleItems(db, items, currentScheduleId) {
   const errors = [];
   if (!Array.isArray(items) || items.length === 0) {
     errors.push('至少需要一条用药明细');
     return { errors, validated: [] };
   }
   const validated = [];
-  const seenBatchIds = new Set();
-  const seenSprayPoints = new Set();
+  const batchReqAggregate = {};
   items.forEach((item, idx) => {
     const lineNo = idx + 1;
     if (!item.batchId) {
@@ -1152,6 +1270,7 @@ function validateScheduleItems(db, items) {
     if (LEVEL_RANK[batch.safetyLevel] < LEVEL_RANK[reqLevel]) {
       errors.push(`第${lineNo}行：批次安全等级(${batch.safetyLevel})低于所需等级(${reqLevel})`);
     }
+    batchReqAggregate[item.batchId] = (batchReqAggregate[item.batchId] || 0) + qty;
     validated.push({
       batchId: item.batchId,
       batch,
@@ -1159,9 +1278,20 @@ function validateScheduleItems(db, items) {
       safetyLevel: reqLevel,
       quantity: qty,
       returned: 0,
-      wasted: 0
+      wasted: 0,
+      reservedQuantity: 0
     });
   });
+  for (const [batchId, totalReq] of Object.entries(batchReqAggregate)) {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) continue;
+    const reservedByOthers = aggregateBatchReservedByOthers(db, batchId, currentScheduleId);
+    const stockQty = Number(batch.quantity || 0);
+    const available = Math.max(0, stockQty - reservedByOthers);
+    if (totalReq > available) {
+      errors.push(`批次「${batch.name}/${batch.batchNo}」可用${available}${batch.unit || ''}（库存${stockQty}，已预占${reservedByOthers}），本次申请${totalReq}${batch.unit || ''}，超出${totalReq - available}${batch.unit || ''}`);
+    }
+  }
   return { errors, validated };
 }
 
@@ -1209,7 +1339,8 @@ app.post('/api/schedules', requireUser, async (req, res) => {
       safetyLevel: v.safetyLevel,
       quantity: v.quantity,
       returned: 0,
-      wasted: 0
+      wasted: 0,
+      reservedQuantity: 0
     })),
     createdAt: now,
     updatedAt: now,
@@ -1241,7 +1372,6 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
 
   const now = new Date();
   const errors = [];
-  const batchQtyMap = {};
   (schedule.items || []).forEach((item, idx) => {
     const lineNo = idx + 1;
     const batch = db.batches.find((b) => b.id === item.batchId);
@@ -1261,16 +1391,6 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
     if (LEVEL_RANK[batch.safetyLevel] < LEVEL_RANK[item.safetyLevel]) {
       errors.push(`第${lineNo}行：批次安全等级(${batch.safetyLevel})低于所需等级(${item.safetyLevel})`);
     }
-    batchQtyMap[item.batchId] = (batchQtyMap[item.batchId] || 0) + Number(item.quantity || 0);
-  });
-
-  Object.entries(batchQtyMap).forEach(([batchId, totalQty]) => {
-    const batch = db.batches.find((b) => b.id === batchId);
-    if (!batch) return;
-    const stockQty = Number(batch.quantity || 0);
-    if (totalQty > stockQty) {
-      errors.push(`批次「${batch.name}/${batch.batchNo}」调度申请合计${totalQty}，超过当前库存${stockQty}`);
-    }
   });
 
   if (errors.length) return res.status(409).json({ error: errors.join('；') });
@@ -1280,22 +1400,19 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
   const approverLabel = `${op.name}（${op.roleLabel}）`;
   const beforeSchedule = JSON.parse(JSON.stringify(schedule));
 
+  const reserveResult = reserveScheduleBatches(db, schedule, op, nowStr);
+  if (!reserveResult.success) {
+    return res.status(409).json({ error: reserveResult.errors.join('；') });
+  }
+
   schedule.status = '调度已审批';
   schedule.approver = approverLabel;
   schedule.approverInfo = { id: op.id, name: op.name, role: op.role, roleLabel: op.roleLabel };
   schedule.approvedAt = nowStr;
   schedule.updatedAt = nowStr;
   schedule.history = schedule.history || [];
-  schedule.history.unshift(stamp('调度审批通过', `审批人：${approverLabel}，共${schedule.items.length}条明细`, op));
-
-  (schedule.items || []).forEach((item) => {
-    const batch = db.batches.find((b) => b.id === item.batchId);
-    if (batch) {
-      batch.updatedAt = nowStr;
-      batch.history = batch.history || [];
-      batch.history.unshift(stamp('调度审批通过', `调度单：${schedule.code}，申请：${item.quantity}${batch.unit || ''}`, op));
-    }
-  });
+  const totalReserved = (schedule.items || []).reduce((s, it) => s + Number(it.reservedQuantity || 0), 0);
+  schedule.history.unshift(stamp('调度审批通过', `审批人：${approverLabel}，共${schedule.items.length}条明细，预占库存合计${totalReserved}单位`, op));
 
   writeAuditLog(db, {
     actionType: '调度审批通过',
@@ -1303,8 +1420,22 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
     targetId: schedule.id,
     targetItem: schedule,
     beforeItem: beforeSchedule,
-    note: `审批人：${approverLabel}，共${schedule.items.length}条明细`,
+    note: `审批人：${approverLabel}，共${schedule.items.length}条明细，预占${totalReserved}单位`,
     operator: op
+  });
+
+  Object.entries(reserveResult.batchSnapshots).forEach(([batchId, beforeBatch]) => {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    writeAuditLog(db, {
+      actionType: '预占库存',
+      collection: 'batches',
+      targetId: batch.id,
+      targetItem: batch,
+      beforeItem: beforeBatch,
+      note: `调度单：${schedule.code}，预占库存：${schedule.items.filter(i => i.batchId === batchId).reduce((s,i)=>s+Number(i.reservedQuantity||0),0)}${batch.unit || ''}，累计预占：${batch.reservedQuantity}${batch.unit || ''}，可用：${getBatchAvailableQuantity(batch)}${batch.unit || ''}`,
+      operator: op
+    });
   });
 
   await writeDb(db);
@@ -1339,9 +1470,13 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
   Object.entries(batchQtyMap).forEach(([batchId, totalQty]) => {
     const batch = db.batches.find((b) => b.id === batchId);
     if (!batch) return;
+    const reservedByOthers = aggregateBatchReservedByOthers(db, batchId, schedule.id);
     const stockQty = Number(batch.quantity || 0);
+    const availableForThis = stockQty - reservedByOthers;
     if (totalQty > stockQty) {
-      errors.push(`批次「${batch.name}/${batch.batchNo}」调度申请合计${totalQty}，超过当前库存${stockQty}`);
+      errors.push(`批次「${batch.name}/${batch.batchNo}」调度申请合计${totalQty}${batch.unit || ''}，超过当前库存${stockQty}${batch.unit || ''}`);
+    } else if (totalQty > availableForThis) {
+      errors.push(`批次「${batch.name}/${batch.batchNo}」扣除其他预占后可用${availableForThis}${batch.unit || ''}（库存${stockQty}，其他预占${reservedByOthers}），本次申请${totalQty}${batch.unit || ''}，请先关闭其他调度单`);
     }
   });
 
@@ -1356,6 +1491,8 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
     const b = db.batches.find((x) => x.id === item.batchId);
     if (b) batchSnapshots[b.id] = JSON.parse(JSON.stringify(b));
   });
+
+  releaseScheduleBatches(db, schedule, op, nowStr, '调度出库，转为实际扣减');
 
   (schedule.items || []).forEach((item) => {
     const batch = db.batches.find((b) => b.id === item.batchId);
@@ -1387,19 +1524,19 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
     operator: op
   });
 
-  (schedule.items || []).forEach((item) => {
-    const batch = db.batches.find((b) => b.id === item.batchId);
-    if (batch && batchSnapshots[batch.id]) {
-      writeAuditLog(db, {
-        actionType: '调度出库(关联)',
-        collection: 'batches',
-        targetId: batch.id,
-        targetItem: batch,
-        beforeItem: batchSnapshots[batch.id],
-        note: `调度单：${schedule.code}，出库：-${item.quantity}${batch.unit || ''}`,
-        operator: op
-      });
-    }
+  Object.entries(batchSnapshots).forEach(([batchId, beforeBatch]) => {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    const schedQty = (schedule.items || []).filter(i => i.batchId === batchId).reduce((s, i) => s + Number(i.quantity || 0), 0);
+    writeAuditLog(db, {
+      actionType: '调度出库(关联)',
+      collection: 'batches',
+      targetId: batch.id,
+      targetItem: batch,
+      beforeItem: beforeBatch,
+      note: `调度单：${schedule.code}，出库：-${schedQty}${batch.unit || ''}，已同步释放预占`,
+      operator: op
+    });
   });
 
   await writeDb(db);
@@ -1481,6 +1618,7 @@ app.post('/api/schedules/:id/return', requireUser, async (req, res) => {
   schedule.returnedAt = nowStr;
   schedule.updatedAt = nowStr;
   schedule.history = schedule.history || [];
+  releaseScheduleBatches(db, schedule, op, nowStr, '调度回库闭环');
   schedule.history.unshift(stamp('调度回库', `回库人：${returnerLabel}，回库合计：${totalReturned}，报废合计：${totalWasted}`, op));
 
   writeAuditLog(db, {
@@ -1517,18 +1655,37 @@ app.delete('/api/schedules/:id', requireUser, async (req, res) => {
   const { id } = req.params;
   if (!db.schedules) return res.status(404).json({ error: 'unknown collection' });
   if (!checkPermission(req.currentUser, 'delete', 'schedules', res)) return;
-  const item = db.schedules.find((s) => s.id === id);
-  if (!item) return res.status(404).json({ error: 'not found' });
-  if (['调度已审批', '调度已出库', '调度已回库'].includes(item.status)) {
-    return res.status(409).json({ error: '已进入审批或出库流程的调度单不能删除' });
+  const schedule = db.schedules.find((s) => s.id === id);
+  if (!schedule) return res.status(404).json({ error: 'not found' });
+  if (['调度已出库', '调度已回库'].includes(schedule.status)) {
+    return res.status(409).json({ error: '已出库或已回库的调度单不能删除' });
+  }
+  const operator = req.currentUser;
+  const nowStr = new Date().toISOString();
+  const extraBatchSnapshots = {};
+  if (schedule.status === '调度已审批') {
+    Object.assign(extraBatchSnapshots, releaseScheduleBatches(db, schedule, operator, nowStr, '删除调度单'));
   }
   writeAuditLog(db, {
     actionType: '删除',
     collection: 'schedules',
     targetId: id,
-    beforeItem: item,
+    beforeItem: schedule,
     note: '删除调度单',
-    operator: req.currentUser
+    operator
+  });
+  Object.entries(extraBatchSnapshots).forEach(([batchId, beforeBatch]) => {
+    const batch = db.batches.find((b) => b.id === batchId);
+    if (!batch) return;
+    writeAuditLog(db, {
+      actionType: '释放预占',
+      collection: 'batches',
+      targetId: batch.id,
+      targetItem: batch,
+      beforeItem: beforeBatch,
+      note: `调度单：${schedule.code || schedule.id}，原因：删除调度单`,
+      operator
+    });
   });
   db.schedules = db.schedules.filter((s) => s.id !== id);
   await writeDb(db);
@@ -1596,8 +1753,32 @@ app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
     suggestedCode,
     suggestedTitle,
     suggestedReason,
-    maxQuantity: Number(batch.quantity || 0)
+    quantity: Number(batch.quantity || 0),
+    reservedQuantity: Number(batch.reservedQuantity || 0),
+    availableQuantity: getBatchAvailableQuantity(batch),
+    maxQuantity: getBatchAvailableQuantity(batch)
   });
+});
+
+app.get('/api/batches/availability', async (req, res) => {
+  const db = await readDb();
+  const result = (db.batches || []).map(batch => {
+    const reservedQty = Number(batch.reservedQuantity || 0);
+    const stockQty = Number(batch.quantity || 0);
+    return {
+      id: batch.id,
+      name: batch.name,
+      batchNo: batch.batchNo,
+      status: batch.status,
+      quantity: stockQty,
+      reservedQuantity: reservedQty,
+      availableQuantity: Math.max(0, stockQty - reservedQty),
+      unit: batch.unit || '',
+      safetyLevel: batch.safetyLevel,
+      expiresAt: batch.expiresAt
+    };
+  });
+  res.json(result);
 });
 
 function escapeCsvField(value) {

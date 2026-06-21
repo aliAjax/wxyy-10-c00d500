@@ -124,6 +124,42 @@ function getAllCabinetOccupancies() {
   return (state.db.cabinets || []).map((c) => computeCabinetOccupancy(c.id));
 }
 
+function getBatchAvailableQuantity(batch) {
+  if (!batch) return 0;
+  const qty = Number(batch.quantity || 0);
+  const reserved = Number(batch.reservedQuantity || 0);
+  return Math.max(0, qty - reserved);
+}
+
+function aggregateBatchReservedByOthers(batchId, excludeScheduleId) {
+  let reservedByOthers = 0;
+  (state.db.schedules || []).forEach(s => {
+    if (s.id === excludeScheduleId) return;
+    if (!['调度已审批', '调度已出库'].includes(s.status)) return;
+    (s.items || []).forEach(it => {
+      if (it.batchId === batchId) {
+        reservedByOthers += Number(it.reservedQuantity || 0);
+      }
+    });
+  });
+  return reservedByOthers;
+}
+
+function batchAvailabilityInfo(batchId, excludeScheduleId) {
+  const batch = (state.db.batches || []).find(b => b.id === batchId);
+  if (!batch) return null;
+  const stockQty = Number(batch.quantity || 0);
+  const reservedByOthers = aggregateBatchReservedByOthers(batchId, excludeScheduleId);
+  const available = Math.max(0, stockQty - reservedByOthers);
+  return {
+    batch,
+    stockQty,
+    reservedByOthers,
+    available,
+    unit: batch.unit || ''
+  };
+}
+
 function occupancyTone(occ) {
   if (!occ) return '';
   if (occ.isOverLimit) return 'bad';
@@ -374,6 +410,14 @@ function renderCard(item, collection, view) {
     ${relation}
     ${summary ? `<p>${escapeHtml(summary)}</p>` : ''}
     ${details ? `<div class="detail">${details}</div>` : ''}
+    ${collection === 'batches' ? (() => {
+      const availInfo = batchAvailabilityInfo(item.id);
+      if (!availInfo) return '';
+      return `<div class="detail batch-stock-detail">
+        <div>已预占<br><strong>${availInfo.reservedByOthers}${escapeHtml(availInfo.unit)}</strong></div>
+        <div>可用库存<br><strong class="${availInfo.available <= 0 ? 'bad-text' : (availInfo.available < Number(item.quantity||0) * 0.3 ? 'warn-text' : 'ok-text')}">${availInfo.available}${escapeHtml(availInfo.unit)}</strong></div>
+      </div>`;
+    })() : ''}
     ${allActions}
     ${historyHtml(item)}
   </article>`;
@@ -1416,15 +1460,31 @@ function renderScheduleFormRows() {
   const batches = (state.db.batches || []).filter(b => b.status === '可用');
   return rows.map((row, idx) => {
     const selectedBatch = batches.find(b => b.id === row.batchId);
-    const maxQty = selectedBatch ? selectedBatch.quantity : 0;
+    const availInfo = selectedBatch ? batchAvailabilityInfo(selectedBatch.id) : null;
+    const stockQty = availInfo ? availInfo.stockQty : 0;
+    const reservedByOthers = availInfo ? availInfo.reservedByOthers : 0;
+    const availableQty = availInfo ? availInfo.available : 0;
     const unit = selectedBatch ? selectedBatch.unit : '';
     const canRemove = rows.length > 1;
     return `<tr class="schedule-form-row">
       <td>
         <select data-sched-row="${idx}" data-sched-field="batchId">
           <option value="">请选择批次</option>
-          ${batches.map(b => `<option value="${b.id}" ${row.batchId === b.id ? 'selected' : ''}>${escapeHtml(b.name + ' / ' + b.batchNo + '（库存：' + b.quantity + b.unit + ' / 等级：' + b.safetyLevel + '）')}</option>`).join('')}
+          ${batches.map(b => {
+            const bInfo = batchAvailabilityInfo(b.id);
+            const bAvail = bInfo ? bInfo.available : 0;
+            const bRes = bInfo ? bInfo.reservedByOthers : 0;
+            const bStock = bInfo ? bInfo.stockQty : 0;
+            const disabled = bAvail <= 0 ? 'disabled' : '';
+            return `<option value="${b.id}" ${row.batchId === b.id ? 'selected' : ''} ${disabled}>${escapeHtml(b.name + ' / ' + b.batchNo)}${bAvail <= 0 ? '（无可用）' : '（可申请' + bAvail + b.unit + ' / 库存' + bStock + b.unit + ' / 已预占' + bRes + b.unit + ' / 等级：' + b.safetyLevel + '）'}</option>`;
+          }).join('')}
         </select>
+        ${selectedBatch ? `
+        <div class="batch-stock-info">
+          <span class="stock-line"><span class="stock-label">库存：</span><strong>${stockQty}${escapeHtml(unit)}</strong></span>
+          <span class="stock-line reserved"><span class="stock-label">已预占：</span><strong>${reservedByOthers}${escapeHtml(unit)}</strong></span>
+          <span class="stock-line available"><span class="stock-label">可申请：</span><strong>${availableQty}${escapeHtml(unit)}</strong></span>
+        </div>` : ''}
       </td>
       <td>
         <input type="text" data-sched-row="${idx}" data-sched-field="sprayPoint" placeholder="如：舞台左侧" value="${escapeHtml(row.sprayPoint || '')}">
@@ -1437,7 +1497,7 @@ function renderScheduleFormRows() {
         </select>
       </td>
       <td class="num-cell">
-        <input type="number" min="1" max="${maxQty || ''}" data-sched-row="${idx}" data-sched-field="quantity" value="${row.quantity || ''}" placeholder="数量">
+        <input type="number" min="1" max="${availableQty || ''}" data-sched-row="${idx}" data-sched-field="quantity" value="${row.quantity || ''}" placeholder="数量">
         <span class="unit">${escapeHtml(unit)}</span>
       </td>
       <td>
