@@ -56,7 +56,12 @@ function checkPermission(user, permType, key, res) {
 async function readDb() {
   const raw = await fs.readFile(DB_FILE, 'utf8');
   const db = JSON.parse(raw);
-  migrateWastesData(db);
+  let changed = migrateWastesData(db);
+  const txChanged = migrateLegacyStockTransactions(db);
+  changed = changed || txChanged;
+  if (changed) {
+    await writeDb(db);
+  }
   return db;
 }
 
@@ -161,9 +166,7 @@ function migrateWastesData(db) {
 
     if (needUpdate) changed = true;
   }
-  if (changed) {
-    fs.writeFile(DB_FILE, JSON.stringify(db, null, 2) + '\n').catch(() => {});
-  }
+  return changed;
 }
 
 async function writeDb(db) {
@@ -186,6 +189,197 @@ function sortNewest(a, b) {
 }
 
 const AUDIT_COLLECTION = 'auditLogs';
+const STOCK_TRANSACTION_COLLECTION = 'stockTransactions';
+
+const STOCK_TRANSACTION_TYPES = {
+  STOCK_IN: 'stockIn',
+  IMPORT: 'import',
+  RESERVE: 'reserve',
+  RELEASE_RESERVE: 'releaseReserve',
+  APPROVE_RESERVE: 'approveReserve',
+  RELEASE_APPROVE_RESERVE: 'releaseApproveReserve',
+  ISSUE: 'issue',
+  RETURN: 'return',
+  STOCKTAKE_ADJUST: 'stocktakeAdjust',
+  WASTE_APPROVE: 'wasteApprove',
+  WASTE_DISPOSE: 'wasteDispose'
+};
+
+const STOCK_TRANSACTION_TYPE_LABELS = {
+  stockIn: '入库',
+  import: '批量导入',
+  reserve: '调度预占',
+  releaseReserve: '释放预占',
+  approveReserve: '审批预占',
+  releaseApproveReserve: '释放审批预占',
+  issue: '出库',
+  return: '回库',
+  stocktakeAdjust: '盘点调整',
+  wasteApprove: '报废审批',
+  wasteDispose: '报废处置'
+};
+
+function writeStockTransaction(db, options) {
+  const {
+    batchId,
+    type,
+    quantity,
+    reservedDelta,
+    relatedType,
+    relatedId,
+    relatedLabel,
+    note,
+    operator,
+    createdAt
+  } = options;
+
+  const batch = db.batches?.find(b => b.id === batchId);
+  if (!batch) return null;
+
+  if (!db[STOCK_TRANSACTION_COLLECTION]) {
+    db[STOCK_TRANSACTION_COLLECTION] = [];
+  }
+
+  const stockQty = Number(batch.quantity || 0);
+  const reservedQty = Number(batch.reservedQuantity || 0);
+
+  const opLabel = operator
+    ? `${operator.name}（${operator.roleLabel}）`
+    : SYSTEM_IMPORT_LABEL;
+
+  const transaction = {
+    id: `${STOCK_TRANSACTION_COLLECTION}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    batchId,
+    type,
+    typeLabel: STOCK_TRANSACTION_TYPE_LABELS[type] || type,
+    quantity: Number(quantity || 0),
+    reservedDelta: Number(reservedDelta || 0),
+    stockAfter: stockQty,
+    reservedAfter: reservedQty,
+    relatedType,
+    relatedId,
+    relatedLabel: relatedLabel || '',
+    note: note || '',
+    operator: operator
+      ? { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel }
+      : null,
+    operatorLabel: opLabel,
+    createdAt: createdAt || new Date().toISOString()
+  };
+
+  db[STOCK_TRANSACTION_COLLECTION].unshift(transaction);
+  return transaction;
+}
+
+function getStockTransactionsByBatchId(db, batchId) {
+  if (!db[STOCK_TRANSACTION_COLLECTION]) return [];
+  return db[STOCK_TRANSACTION_COLLECTION]
+    .filter(t => t.batchId === batchId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function getStockTransactionsByRelated(db, relatedType, relatedId) {
+  if (!db[STOCK_TRANSACTION_COLLECTION]) return [];
+  return db[STOCK_TRANSACTION_COLLECTION]
+    .filter(t => t.relatedType === relatedType && t.relatedId === relatedId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function migrateLegacyStockTransactions(db) {
+  if (!db.batches) return false;
+  if (!db[STOCK_TRANSACTION_COLLECTION]) {
+    db[STOCK_TRANSACTION_COLLECTION] = [];
+  }
+
+  const initialCount = db[STOCK_TRANSACTION_COLLECTION].length;
+  const existingBatchIds = new Set(
+    db[STOCK_TRANSACTION_COLLECTION].map(t => t.batchId)
+  );
+
+  for (const batch of db.batches) {
+    if (existingBatchIds.has(batch.id)) continue;
+
+    const createdAt = batch.createdAt || batch.updatedAt;
+    const initialQty = Number(batch.quantity || 0);
+
+    writeStockTransaction(db, {
+      batchId: batch.id,
+      type: STOCK_TRANSACTION_TYPES.STOCK_IN,
+      quantity: initialQty,
+      reservedDelta: 0,
+      relatedType: 'batches',
+      relatedId: batch.id,
+      relatedLabel: getTargetLabel(batch, 'batches'),
+      note: '(历史数据迁移) 初始建账，期初库存',
+      operator: batch.createdBy,
+      createdAt: createdAt
+    });
+
+    const history = batch.history || [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const entry = history[i];
+      const action = entry.action || '';
+      const note = entry.note || '';
+
+      let type = null;
+      let quantity = 0;
+      let reservedDelta = 0;
+
+      if (action.includes('预占') || action.includes('预占库存')) {
+        type = STOCK_TRANSACTION_TYPES.RESERVE;
+        const match = note.match(/预占：\+?(-?\d+)/);
+        if (match) reservedDelta = Number(match[1]);
+      } else if (action.includes('释放预占')) {
+        type = STOCK_TRANSACTION_TYPES.RELEASE_RESERVE;
+        const match = note.match(/释放：-?(\d+)/);
+        if (match) reservedDelta = -Number(match[1]);
+      } else if (action.includes('出库')) {
+        type = STOCK_TRANSACTION_TYPES.ISSUE;
+        const match = note.match(/出库：-?(\d+)/);
+        if (match) quantity = -Number(match[1]);
+      } else if (action.includes('回库')) {
+        type = STOCK_TRANSACTION_TYPES.RETURN;
+        const match = note.match(/回库：\+?(\d+)/);
+        if (match) quantity = Number(match[1]);
+      } else if (action.includes('盘点') || action.includes('盘盈') || action.includes('盘亏')) {
+        type = STOCK_TRANSACTION_TYPES.STOCKTAKE_ADJUST;
+        const match = note.match(/(盘盈\+|盘亏-)(\d+)/);
+        if (match) {
+          quantity = match[1] === '盘盈+' ? Number(match[2]) : -Number(match[2]);
+        }
+      } else if (action.includes('报废') && (action.includes('扣减') || action.includes('处置'))) {
+        type = STOCK_TRANSACTION_TYPES.WASTE_DISPOSE;
+        const match = note.match(/扣减：-?(\d+)/) || note.match(/报废数量：-?(\d+)/);
+        if (match) quantity = -Number(match[1]);
+      } else if (action.includes('报废审批通过')) {
+        type = STOCK_TRANSACTION_TYPES.WASTE_APPROVE;
+      } else if (action.includes('批量导入')) {
+        type = STOCK_TRANSACTION_TYPES.IMPORT;
+        const match = note.match(/导入(\d+)/);
+        if (match) quantity = Number(match[1]);
+      } else if (action === '创建') {
+        continue;
+      }
+
+      if (type) {
+        writeStockTransaction(db, {
+          batchId: batch.id,
+          type,
+          quantity,
+          reservedDelta,
+          relatedType: 'batches',
+          relatedId: batch.id,
+          relatedLabel: getTargetLabel(batch, 'batches'),
+          note: '(历史数据迁移) ' + action + (note ? '：' + note : ''),
+          operator: entry.operator,
+          createdAt: entry.at
+        });
+      }
+    }
+  }
+  
+  return db[STOCK_TRANSACTION_COLLECTION].length > initialCount;
+}
 
 function computeChanges(before, after, fields) {
   const changes = {};
@@ -256,6 +450,22 @@ app.get('/api/db', async (req, res) => {
     if (Array.isArray(db[key])) db[key].sort(sortNewest);
   }
   res.json(db);
+});
+
+app.get('/api/batches/:id/transactions', async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const batch = db.batches?.find(b => b.id === id);
+  if (!batch) return res.status(404).json({ error: '批次不存在' });
+  const transactions = getStockTransactionsByBatchId(db, id);
+  res.json({ batch, transactions });
+});
+
+app.get('/api/transactions/related/:type/:id', async (req, res) => {
+  const db = await readDb();
+  const { type, id } = req.params;
+  const transactions = getStockTransactionsByRelated(db, type, id);
+  res.json({ transactions });
 });
 
 app.post('/api/:collection', requireUser, async (req, res, next) => {
@@ -423,6 +633,18 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
       history: [stamp('创建', defaultNote, operator)]
     };
+    writeStockTransaction(db, {
+      batchId: item.id,
+      type: STOCK_TRANSACTION_TYPES.STOCK_IN,
+      quantity: addQty,
+      reservedDelta: 0,
+      relatedType: 'batches',
+      relatedId: item.id,
+      relatedLabel: getTargetLabel(item, 'batches'),
+      note: defaultNote || '入库创建批次',
+      operator,
+      createdAt: now
+    });
   } else {
     const defaultNote = req.body.note || req.body.memo || '';
     item = {
@@ -858,9 +1080,85 @@ function runAction(db, action, item, operator) {
     if (guard.op === 'levelGte' && (levelRank[left] || 0) < (levelRank[right] || 0)) return { error: guard.message };
     if (guard.op === 'notIn' && guard.values.includes(left)) return { error: guard.message };
   }
+
+  const now = new Date().toISOString();
+
+  if (action.id === 'request-approve' && action.collection === 'requests') {
+    const reqQty = Number(item.quantity || 0);
+    const batch = related;
+    if (batch) {
+      batch.reservedQuantity = Number(batch.reservedQuantity || 0) + reqQty;
+      batch.updatedAt = now;
+      writeStockTransaction(db, {
+        batchId: batch.id,
+        type: STOCK_TRANSACTION_TYPES.APPROVE_RESERVE,
+        quantity: 0,
+        reservedDelta: reqQty,
+        relatedType: 'requests',
+        relatedId: item.id,
+        relatedLabel: getTargetLabel(item, 'requests'),
+        note: `领用申请审批通过，预占${reqQty}${batch.unit || ''}`,
+        operator,
+        createdAt: now
+      });
+    }
+  }
+
+  if (action.id === 'request-reject' && action.collection === 'requests') {
+    const reqQty = Number(item.quantity || 0);
+    const batch = related;
+    if (batch) {
+      const oldReserved = Number(batch.reservedQuantity || 0);
+      if (oldReserved > 0) {
+        batch.reservedQuantity = Math.max(0, oldReserved - reqQty);
+        batch.updatedAt = now;
+        writeStockTransaction(db, {
+          batchId: batch.id,
+          type: STOCK_TRANSACTION_TYPES.RELEASE_APPROVE_RESERVE,
+          quantity: 0,
+          reservedDelta: -reqQty,
+          relatedType: 'requests',
+          relatedId: item.id,
+          relatedLabel: getTargetLabel(item, 'requests'),
+          note: `领用申请驳回，释放预占${reqQty}${batch.unit || ''}`,
+          operator,
+          createdAt: now
+        });
+      }
+    }
+  }
+
+  if (action.id === 'request-return' && action.collection === 'requests') {
+    const reqQty = Number(item.quantity || 0);
+    const batch = related;
+    if (batch) {
+      const oldReserved = Number(batch.reservedQuantity || 0);
+      if (oldReserved > 0) {
+        batch.reservedQuantity = Math.max(0, oldReserved - reqQty);
+      }
+      batch.quantity = Number(batch.quantity || 0) + reqQty;
+      batch.updatedAt = now;
+      writeStockTransaction(db, {
+        batchId: batch.id,
+        type: STOCK_TRANSACTION_TYPES.RETURN,
+        quantity: reqQty,
+        reservedDelta: -reqQty,
+        relatedType: 'requests',
+        relatedId: item.id,
+        relatedLabel: getTargetLabel(item, 'requests'),
+        note: `领用回库${reqQty}${batch.unit || ''}`,
+        operator,
+        createdAt: now
+      });
+    }
+  }
+
   for (const patch of action.patches || []) {
     const target = patch.target === 'related' ? related : item;
     if (!target) continue;
+    if (action.id === 'request-approve' && patch.field === 'status') continue;
+    if (action.id === 'request-reject' && patch.field === 'status') continue;
+    if (action.id === 'request-return' && (patch.field === 'status' || patch.field === 'returned')) continue;
     const next = patch.valuePath ? getValue(context, patch.valuePath) : patch.value;
     setValue(target, patch.field, next);
     target.updatedAt = new Date().toISOString();
@@ -870,6 +1168,38 @@ function runAction(db, action, item, operator) {
   for (const delta of action.deltas || []) {
     const target = delta.target === 'related' ? related : item;
     if (!target) continue;
+    if (action.id === 'request-issue' && target === related) {
+      const sourceAmount = delta.amountPath ? Number(getValue(context, delta.amountPath)) : 1;
+      const multiplier = delta.amount === undefined ? 1 : Number(delta.amount);
+      const amount = sourceAmount * multiplier;
+      const current = Number(getValue({ target }, `target.${delta.field}`) || 0);
+      setValue(target, delta.field, current + amount);
+      target.updatedAt = new Date().toISOString();
+      target.history = target.history || [];
+      target.history.unshift(stamp(action.label, action.note || '数量调整', operator));
+
+      const reqQty = Number(item.quantity || 0);
+      const batch = related;
+      if (batch) {
+        const oldReserved = Number(batch.reservedQuantity || 0);
+        if (oldReserved > 0) {
+          batch.reservedQuantity = Math.max(0, oldReserved - reqQty);
+        }
+        writeStockTransaction(db, {
+          batchId: batch.id,
+          type: STOCK_TRANSACTION_TYPES.ISSUE,
+          quantity: amount,
+          reservedDelta: -reqQty,
+          relatedType: 'requests',
+          relatedId: item.id,
+          relatedLabel: getTargetLabel(item, 'requests'),
+          note: `领用出库${Math.abs(amount)}${batch.unit || ''}`,
+          operator,
+          createdAt: now
+        });
+      }
+      continue;
+    }
     const sourceAmount = delta.amountPath ? Number(getValue(context, delta.amountPath)) : 1;
     const multiplier = delta.amount === undefined ? 1 : Number(delta.amount);
     const amount = sourceAmount * multiplier;
@@ -879,6 +1209,26 @@ function runAction(db, action, item, operator) {
     target.history = target.history || [];
     target.history.unshift(stamp(action.label, action.note || '数量调整', operator));
   }
+
+  if (action.id === 'request-approve' || action.id === 'request-reject' || action.id === 'request-return') {
+    const target = item;
+    const patch = action.patches?.find(p => p.field === 'status');
+    if (patch) {
+      const next = patch.valuePath ? getValue(context, patch.valuePath) : patch.value;
+      setValue(target, patch.field, next);
+    }
+    if (action.id === 'request-return') {
+      const returnPatch = action.patches?.find(p => p.field === 'returned');
+      if (returnPatch) {
+        const next = returnPatch.valuePath ? getValue(context, returnPatch.valuePath) : returnPatch.value;
+        setValue(target, returnPatch.field, next);
+      }
+    }
+    target.updatedAt = new Date().toISOString();
+    target.history = target.history || [];
+    target.history.unshift(stamp(action.label, action.note || '状态流转', operator));
+  }
+
   return { item };
 }
 
@@ -923,6 +1273,19 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
       const diffText = diff > 0 ? `盘盈+${diff}${batch.unit || ''}` : `盘亏${diff}${batch.unit || ''}`;
       const remarkText = item.remark ? `，原因：${item.remark}` : '';
       batch.history.unshift(stamp('盘点调整', `${diffText}，盘点单：${stocktake.code || stocktake.id}${remarkText}`, operator));
+
+      writeStockTransaction(db, {
+        batchId: batch.id,
+        type: STOCK_TRANSACTION_TYPES.STOCKTAKE_ADJUST,
+        quantity: diff,
+        reservedDelta: 0,
+        relatedType: 'stocktakes',
+        relatedId: stocktake.id,
+        relatedLabel: getTargetLabel(stocktake, 'stocktakes'),
+        note: `${diffText}，盘点单：${stocktake.code || stocktake.id}${remarkText}`,
+        operator,
+        createdAt: now
+      });
 
       const diffType = diff > 0 ? 'surplus' : 'deficit';
       const suggestion = diff > 0
@@ -1065,6 +1428,19 @@ app.post('/api/wastes/:id/approve', requireUser, async (req, res) => {
   batch.updatedAt = now;
   batch.history = batch.history || [];
   batch.history.unshift(stamp('报废审批通过', `报废单：${waste.code || waste.id}，申请报废：${wasteQty}${batch.unit || ''}`, operator));
+
+  writeStockTransaction(db, {
+    batchId: batch.id,
+    type: STOCK_TRANSACTION_TYPES.WASTE_APPROVE,
+    quantity: 0,
+    reservedDelta: 0,
+    relatedType: 'wastes',
+    relatedId: waste.id,
+    relatedLabel: getTargetLabel(waste, 'wastes'),
+    note: `报废审批通过，申请报废：${wasteQty}${batch.unit || ''}，报废单：${waste.code || waste.id}`,
+    operator,
+    createdAt: now
+  });
 
   writeAuditLog(db, {
     actionType: '审批通过',
@@ -1224,6 +1600,19 @@ app.post('/api/wastes/:id/dispose', requireUser, async (req, res) => {
     ? (isFullyDisposed ? '报废扣减完成(盘点发起)' : '报废扣减(盘点发起)')
     : (isFullyDisposed ? '报废扣减完成' : '报废扣减');
   batch.history.unshift(stamp(batchAction, noteParts.join('，'), operator));
+
+  writeStockTransaction(db, {
+    batchId: batch.id,
+    type: STOCK_TRANSACTION_TYPES.WASTE_DISPOSE,
+    quantity: -deductFromStock,
+    reservedDelta: 0,
+    relatedType: 'wastes',
+    relatedId: waste.id,
+    relatedLabel: getTargetLabel(waste, 'wastes'),
+    note: `报废处置：${actualQty}${batch.unit || ''}，从库存扣减：${deductFromStock}${batch.unit || ''}${isStocktakeInitiated ? `，盘亏抵充：${offsetByStocktake}${batch.unit || ''}` : ''}`,
+    operator,
+    createdAt: now
+  });
 
   if (waste.stocktakeId) {
     const stocktake = db.stocktakes?.find((s) => s.id === waste.stocktakeId);
@@ -1988,6 +2377,19 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
       db.batches.push(item);
       imported.push(item);
 
+      writeStockTransaction(db, {
+        batchId: item.id,
+        type: STOCK_TRANSACTION_TYPES.IMPORT,
+        quantity: addQty,
+        reservedDelta: 0,
+        relatedType: 'batches',
+        relatedId: item.id,
+        relatedLabel: getTargetLabel(item, 'batches'),
+        note: `批量导入${addQty}${rowData.unit || '罐'}${pendingCreate.supplier || pendingCreate.cabinet ? '，自动创建关联供应商/柜位' : ''}`,
+        operator,
+        createdAt: now
+      });
+
       writeAuditLog(db, {
         actionType: '批量导入',
         collection: 'batches',
@@ -2117,6 +2519,18 @@ function reserveScheduleBatches(db, schedule, operator, nowStr) {
     batch.updatedAt = nowStr;
     batch.history = batch.history || [];
     batch.history.unshift(stamp('预占库存', `调度单：${schedule.code}，预占：+${qty}${batch.unit || ''}，累计预占：${batch.reservedQuantity}${batch.unit || ''}，可用：${getBatchAvailableQuantity(batch)}${batch.unit || ''}`, operator));
+    writeStockTransaction(db, {
+      batchId: batch.id,
+      type: STOCK_TRANSACTION_TYPES.RESERVE,
+      quantity: 0,
+      reservedDelta: qty,
+      relatedType: 'schedules',
+      relatedId: schedule.id,
+      relatedLabel: getTargetLabel(schedule, 'schedules'),
+      note: `调度审批通过，预占${qty}${batch.unit || ''}，调度单：${schedule.code}`,
+      operator,
+      createdAt: nowStr
+    });
   });
   return results;
 }
@@ -2134,6 +2548,18 @@ function releaseScheduleBatches(db, schedule, operator, nowStr, reason) {
     batch.updatedAt = nowStr;
     batch.history = batch.history || [];
     batch.history.unshift(stamp('释放预占', `调度单：${schedule.code}，释放：-${toRelease}${batch.unit || ''}${reason ? '，原因：' + reason : ''}，剩余预占：${batch.reservedQuantity}${batch.unit || ''}，可用：${getBatchAvailableQuantity(batch)}${batch.unit || ''}`, operator));
+    writeStockTransaction(db, {
+      batchId: batch.id,
+      type: STOCK_TRANSACTION_TYPES.RELEASE_RESERVE,
+      quantity: 0,
+      reservedDelta: -toRelease,
+      relatedType: 'schedules',
+      relatedId: schedule.id,
+      relatedLabel: getTargetLabel(schedule, 'schedules'),
+      note: `${reason || '释放预占'}${toRelease}${batch.unit || ''}，调度单：${schedule.code}`,
+      operator,
+      createdAt: nowStr
+    });
   });
   return batchSnapshots;
 }
@@ -2403,6 +2829,18 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
       batch.updatedAt = nowStr;
       batch.history = batch.history || [];
       batch.history.unshift(stamp('调度出库', `调度单：${schedule.code}，出库：-${item.quantity}${batch.unit || ''}，剩余：${batch.quantity}${batch.unit || ''}`, op));
+      writeStockTransaction(db, {
+        batchId: batch.id,
+        type: STOCK_TRANSACTION_TYPES.ISSUE,
+        quantity: -item.quantity,
+        reservedDelta: 0,
+        relatedType: 'schedules',
+        relatedId: schedule.id,
+        relatedLabel: getTargetLabel(schedule, 'schedules'),
+        note: `调度出库${item.quantity}${batch.unit || ''}，调度单：${schedule.code}`,
+        operator: op,
+        createdAt: nowStr
+      });
     }
   });
 
@@ -2507,6 +2945,20 @@ app.post('/api/schedules/:id/return', requireUser, async (req, res) => {
         batch.updatedAt = nowStr;
         batch.history = batch.history || [];
         batch.history.unshift(stamp('调度回库', `调度单：${schedule.code}，回库：+${rm.returned}${batch.unit || ''}，报废：${rm.wasted}${batch.unit || ''}，现有：${batch.quantity}${batch.unit || ''}`, op));
+        if (rm.returned > 0) {
+          writeStockTransaction(db, {
+            batchId: batch.id,
+            type: STOCK_TRANSACTION_TYPES.RETURN,
+            quantity: rm.returned,
+            reservedDelta: 0,
+            relatedType: 'schedules',
+            relatedId: schedule.id,
+            relatedLabel: getTargetLabel(schedule, 'schedules'),
+            note: `调度回库${rm.returned}${batch.unit || ''}，报废${rm.wasted}${batch.unit || ''}，调度单：${schedule.code}`,
+            operator: op,
+            createdAt: nowStr
+          });
+        }
       }
     }
   });

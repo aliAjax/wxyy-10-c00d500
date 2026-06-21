@@ -118,7 +118,8 @@ module.exports = {
     projects: { label: '演出项目' },
     stocktakes: { label: '库存盘点' },
     wastes: { label: '报废处置' },
-    auditLogs: { label: '操作审计日志' }
+    auditLogs: { label: '操作审计日志' },
+    stockTransactions: { label: '库存流水' }
   },
   alerts: {
     expiringDays: 30,

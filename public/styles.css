@@ -311,6 +311,170 @@ main {
   font-size: 13px;
 }
 
+.stock-transactions {
+  margin-top: 12px;
+  border-top: 2px solid var(--line);
+  padding-top: 12px;
+}
+
+.stock-transactions-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.stock-transactions-title strong {
+  color: var(--ink);
+}
+
+.stock-transactions-icon {
+  font-size: 16px;
+}
+
+.stock-transactions-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.stock-transactions-list {
+  display: grid;
+  gap: 8px;
+}
+
+.stock-transaction-item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  position: relative;
+}
+
+.stock-transaction-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+}
+
+.stock-transaction-item.ok::before {
+  background: var(--ok);
+}
+
+.stock-transaction-item.warn::before {
+  background: var(--warn);
+}
+
+.stock-transaction-item.bad::before {
+  background: var(--bad);
+}
+
+.st-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.st-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.st-type.ok {
+  background: rgba(38, 115, 77, 0.12);
+  color: var(--ok);
+}
+
+.st-type.warn {
+  background: rgba(163, 92, 0, 0.12);
+  color: var(--warn);
+}
+
+.st-type.bad {
+  background: rgba(161, 61, 61, 0.12);
+  color: var(--bad);
+}
+
+.st-time {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.st-body {
+  display: grid;
+  gap: 4px;
+}
+
+.st-qtys {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.st-qty {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.st-qty.qty-positive {
+  color: var(--ok);
+}
+
+.st-qty.qty-negative {
+  color: var(--bad);
+}
+
+.st-stock {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.st-note {
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.st-related {
+  display: flex;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.st-related-label {
+  color: var(--muted);
+}
+
+.st-related-value {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.st-operator {
+  margin-top: 2px;
+}
+
+.st-op {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .empty {
   color: var(--muted);
   padding: 24px;

@@ -275,6 +275,110 @@ function historyHtml(item) {
   `).join('')}</div>`;
 }
 
+function stockTransactionTone(type) {
+  const toneMap = {
+    stockIn: 'ok',
+    import: 'ok',
+    reserve: 'warn',
+    releaseReserve: 'ok',
+    approveReserve: 'warn',
+    releaseApproveReserve: 'ok',
+    issue: 'bad',
+    return: 'ok',
+    stocktakeAdjust: 'warn',
+    wasteApprove: 'warn',
+    wasteDispose: 'bad'
+  };
+  return toneMap[type] || '';
+}
+
+function stockTransactionTypeLabel(type) {
+  const labelMap = {
+    stockIn: '入库',
+    import: '批量导入',
+    reserve: '调度预占',
+    releaseReserve: '释放预占',
+    approveReserve: '审批预占',
+    releaseApproveReserve: '释放审批预占',
+    issue: '出库',
+    return: '回库',
+    stocktakeAdjust: '盘点调整',
+    wasteApprove: '报废审批',
+    wasteDispose: '报废处置'
+  };
+  return labelMap[type] || type;
+}
+
+function stockTransactionsHtml(transactions, options = {}) {
+  if (!transactions || !transactions.length) return '';
+  const { title = '库存流水', limit = 0 } = options;
+  const displayTransactions = limit > 0 ? transactions.slice(0, limit) : transactions;
+  return `
+    <div class="stock-transactions">
+      <div class="stock-transactions-title">
+        <span class="stock-transactions-icon">📊</span>
+        <strong>${escapeHtml(title)}</strong>
+        <span class="stock-transactions-count">共 ${transactions.length} 条记录</span>
+      </div>
+      <div class="stock-transactions-list">
+        ${displayTransactions.map((t) => {
+          const qtyClass = t.quantity > 0 ? 'qty-positive' : (t.quantity < 0 ? 'qty-negative' : '');
+          const reserveClass = t.reservedDelta > 0 ? 'qty-positive' : (t.reservedDelta < 0 ? 'qty-negative' : '');
+          const tone = stockTransactionTone(t.type);
+          return `
+            <div class="stock-transaction-item ${tone}">
+              <div class="st-head">
+                <span class="st-type ${tone}">${escapeHtml(stockTransactionTypeLabel(t.type))}</span>
+                <span class="st-time">${fmtDate(t.createdAt)}</span>
+              </div>
+              <div class="st-body">
+                <div class="st-qtys">
+                  ${t.quantity !== 0 ? `<span class="st-qty ${qtyClass}">库存 ${t.quantity > 0 ? '+' : ''}${t.quantity}</span>` : ''}
+                  ${t.reservedDelta !== 0 ? `<span class="st-qty ${reserveClass}">预占 ${t.reservedDelta > 0 ? '+' : ''}${t.reservedDelta}</span>` : ''}
+                </div>
+                <div class="st-stock">
+                  <span>结存：${t.stockAfter}</span>
+                  ${t.reservedAfter !== undefined && t.reservedAfter > 0 ? `<span>预占：${t.reservedAfter}</span>` : ''}
+                </div>
+                ${t.note ? `<div class="st-note">${escapeHtml(t.note)}</div>` : ''}
+                ${t.relatedLabel ? `
+                  <div class="st-related">
+                    <span class="st-related-label">关联单据：</span>
+                    <span class="st-related-value">${escapeHtml(t.relatedType || '')} ${escapeHtml(t.relatedLabel || '')}</span>
+                  </div>
+                ` : ''}
+                <div class="st-operator">
+                  <span class="st-op">[${escapeHtml(t.operatorLabel || SYSTEM_IMPORT_LABEL)}]</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+async function loadStockTransactions(batchId) {
+  try {
+    const data = await api(`/api/batches/${batchId}/transactions`);
+    return data.transactions || [];
+  } catch (e) {
+    console.error('加载库存流水失败:', e);
+    return [];
+  }
+}
+
+async function loadRelatedStockTransactions(type, id) {
+  try {
+    const data = await api(`/api/transactions/related/${type}/${id}`);
+    return data.transactions || [];
+  } catch (e) {
+    console.error('加载关联库存流水失败:', e);
+    return [];
+  }
+}
+
 function values(form, view) {
   const payload = Object.fromEntries(new FormData(form).entries());
   for (const field of view.fields) {
@@ -422,6 +526,10 @@ function renderCard(item, collection, view) {
     })() : ''}
     ${allActions}
     ${historyHtml(item)}
+    ${collection === 'batches' ? (() => {
+      const transactions = state.db.stockTransactions?.filter(t => t.batchId === item.id) || [];
+      return stockTransactionsHtml(transactions, { title: '库存台账', limit: 3 });
+    })() : ''}
   </article>`;
 }
 
@@ -1025,6 +1133,7 @@ function renderStocktakeCard(stocktake, view) {
         ${!canSaveItems && !canConfirm ? `<span class="no-permission-tip-inline">⚠️ 当前角色无盘点操作权限</span>` : ''}
       </div>
     `;
+    const transactions = state.db.stockTransactions?.filter(t => t.relatedType === 'stocktakes' && t.relatedId === stocktake.id) || [];
     expandContent = `
       <div class="stocktake-detail">
         ${confirmed && stocktake.confirmedAt ? `<div class="meta">确认人：${escapeHtml(stocktake.confirmedBy || '-')}　确认时间：${fmtDate(stocktake.confirmedAt)}</div>` : ''}
@@ -1038,6 +1147,7 @@ function renderStocktakeCard(stocktake, view) {
           </tbody>
         </table>
         ${actions}
+        ${stockTransactionsHtml(transactions, { title: '关联库存流水' })}
       </div>
     `;
   }
@@ -1246,6 +1356,7 @@ function renderWasteCard(waste, view) {
       `;
     }
 
+    const transactions = state.db.stockTransactions?.filter(t => t.relatedType === 'wastes' && t.relatedId === waste.id) || [];
     expandContent = `
       <div class="waste-detail">
         <div class="meta">关联批次：${escapeHtml(batchLabel)}</div>
@@ -1265,6 +1376,7 @@ function renderWasteCard(waste, view) {
         <div class="detail">${detailRows}</div>
         ${disposalRecordsHtml}
         ${actionButtons}
+        ${stockTransactionsHtml(transactions, { title: '关联库存流水' })}
       </div>
     `;
   }
@@ -1979,6 +2091,7 @@ function renderScheduleCard(schedule, view) {
       ${schedule.note ? `<div class="meta">备注：${escapeHtml(schedule.note)}</div>` : ''}
     `;
     const deleteBtn = canDelete ? `<button class="danger" data-delete-schedule="${schedule.id}" style="margin-left:auto;">删除调度单</button>` : '';
+    const transactions = state.db.stockTransactions?.filter(t => t.relatedType === 'schedules' && t.relatedId === schedule.id) || [];
     expandContent = `
       <div class="schedule-detail">
         ${metaInfo}
@@ -1988,6 +2101,7 @@ function renderScheduleCard(schedule, view) {
           ${actionButtons}
           ${deleteBtn}
         </div>
+        ${stockTransactionsHtml(transactions, { title: '关联库存流水' })}
       </div>
     `;
   }
