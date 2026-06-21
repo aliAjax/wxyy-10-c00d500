@@ -1060,6 +1060,80 @@
   ],
   "auditLogs": [
     {
+      "id": "auditLogs-1782036643402-32432",
+      "actionType": "规则警告",
+      "targetCollection": "ruleViolations",
+      "targetId": "rv-expired-demo-001",
+      "targetLabel": "rv-expired-demo-001",
+      "changes": {
+        "id": {
+          "after": "rv-expired-demo-001"
+        },
+        "ruleId": {
+          "after": "expired-batch-no-issue"
+        },
+        "ruleLabel": {
+          "after": "过期批次不可出库"
+        },
+        "severity": {
+          "after": "critical"
+        },
+        "severityLabel": {
+          "after": "严重阻断"
+        },
+        "scenario": {
+          "after": "batchIssue"
+        },
+        "scenarioLabel": {
+          "after": "批次出库"
+        },
+        "entityType": {
+          "after": "batch"
+        },
+        "entityId": {
+          "after": "batch-seed-expired-1"
+        },
+        "context": {
+          "after": "批次 PY-EXPIRED-2512 已过期 195 天，有效期 2025-12-31，当前 2026-07-15"
+        },
+        "suggestion": {
+          "after": "请立即提交报废申请，严禁出库使用；如确需继续使用，请联系安全管理部门进行专项评估"
+        },
+        "operator": {
+          "after": null
+        },
+        "detectedAt": {
+          "after": "2026-07-15T08:30:00.000Z"
+        },
+        "resolved": {
+          "after": true
+        },
+        "resolvedAt": {
+          "after": "2026-06-21T10:10:43.402Z"
+        },
+        "resolvedBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian"
+          }
+        },
+        "resolutionNote": {
+          "after": ""
+        }
+      },
+      "note": "规则违规已处理：过期批次不可出库",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T10:10:43.402Z"
+    },
+    {
       "id": "auditLogs-1782022424555-68389",
       "actionType": "批量导入",
       "targetCollection": "batches",
@@ -2739,6 +2813,103 @@
       "operator": null,
       "operatorLabel": "系统导入",
       "createdAt": "2026-06-16T09:00:00.000Z"
+    }
+  ],
+  "ruleViolations": [
+    {
+      "id": "rv-expired-demo-001",
+      "ruleId": "expired-batch-no-issue",
+      "ruleLabel": "过期批次不可出库",
+      "severity": "critical",
+      "severityLabel": "严重阻断",
+      "scenario": "batchIssue",
+      "scenarioLabel": "批次出库",
+      "entityType": "batch",
+      "entityId": "batch-seed-expired-1",
+      "context": "批次 PY-EXPIRED-2512 已过期 195 天，有效期 2025-12-31，当前 2026-07-15",
+      "suggestion": "请立即提交报废申请，严禁出库使用；如确需继续使用，请联系安全管理部门进行专项评估",
+      "operator": null,
+      "detectedAt": "2026-07-15T08:30:00.000Z",
+      "resolved": true,
+      "resolvedAt": "2026-06-21T10:10:43.402Z",
+      "resolvedBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian"
+      },
+      "resolutionNote": ""
+    },
+    {
+      "id": "rv-supplier-demo-001",
+      "ruleId": "supplier-expired-batch-locked",
+      "ruleLabel": "供应商资质过期批次需锁定",
+      "severity": "high",
+      "severityLabel": "高风险",
+      "scenario": "batchIssue",
+      "scenarioLabel": "批次出库",
+      "entityType": "batch",
+      "entityId": "batch-seed-3",
+      "context": "供应商 焰火供应有限公司 资质已过期 45 天，关联批次 LH-B03-2604",
+      "suggestion": "请联系供应商更新资质文件，资质更新前该批次锁定禁止出库",
+      "operator": null,
+      "detectedAt": "2026-07-14T10:15:00.000Z",
+      "resolved": false,
+      "resolvedAt": null,
+      "resolvedBy": null
+    },
+    {
+      "id": "rv-cabinet-demo-001",
+      "ruleId": "disabled-cabinet-no-use",
+      "ruleLabel": "停用柜位不可入库或调度",
+      "severity": "critical",
+      "severityLabel": "严重阻断",
+      "scenario": "cabinetUse",
+      "scenarioLabel": "柜位使用",
+      "entityType": "cabinet",
+      "entityId": "cabinet-004",
+      "context": "防爆柜 C-04-B 区域 B 层已停用，状态为停用，禁止入库或调度",
+      "suggestion": "请选择其他可用柜位，或联系管理员将该柜位恢复为启用状态",
+      "operator": null,
+      "detectedAt": "2026-07-13T14:20:00.000Z",
+      "resolved": false,
+      "resolvedAt": null,
+      "resolvedBy": null
+    },
+    {
+      "id": "rv-safety-demo-001",
+      "ruleId": "high-risk-show-requires-high-safety",
+      "ruleLabel": "高风险演出只能使用高安全等级批次",
+      "severity": "critical",
+      "severityLabel": "严重阻断",
+      "scenario": "scheduleCreate",
+      "scenarioLabel": "创建调度单",
+      "entityType": "schedule",
+      "entityId": "schedule-seed-1",
+      "context": "海港音乐节 为高风险演出(安全等级 高)，但批次 PY-A17-2605 安全等级为 低，不匹配",
+      "suggestion": "请更换安全等级为 高 或 特高 的批次，或降低演出风险等级评估",
+      "operator": null,
+      "detectedAt": "2026-07-12T16:45:00.000Z",
+      "resolved": false,
+      "resolvedAt": null,
+      "resolvedBy": null
+    },
+    {
+      "id": "rv-conflict-demo-001",
+      "ruleId": "same-time-spraypoint-conflict",
+      "ruleLabel": "同一演出时段同一喷点不能重复申请",
+      "severity": "high",
+      "severityLabel": "高风险",
+      "scenario": "requestCreate",
+      "scenarioLabel": "创建申请单",
+      "entityType": "request",
+      "entityId": "request-seed-2",
+      "context": "喷点 主舞台左侧 时段 2026-07-20 20:00-22:00 已被申请单 req-20260715-002 占用，存在冲突",
+      "suggestion": "请更换喷点或调整演出时段，避免同一喷点在相同时段重复使用",
+      "operator": null,
+      "detectedAt": "2026-07-15T09:00:00.000Z",
+      "resolved": false,
+      "resolvedAt": null,
+      "resolvedBy": null
     }
   ]
 }

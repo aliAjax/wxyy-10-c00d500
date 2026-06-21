@@ -119,7 +119,8 @@ module.exports = {
     stocktakes: { label: '库存盘点' },
     wastes: { label: '报废处置' },
     auditLogs: { label: '操作审计日志' },
-    stockTransactions: { label: '库存流水' }
+    stockTransactions: { label: '库存流水' },
+    ruleViolations: { label: '规则违规记录' }
   },
   alerts: {
     expiringDays: 30,
@@ -477,7 +478,86 @@ module.exports = {
     { id: 'schedule-reject', label: '驳回', collection: 'schedules', danger: true, patches: [{ field: 'status', value: '调度已驳回' }] }
   ],
   auditLog: {
-    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '部分处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消', '调度创建', '调度审批通过', '调度驳回', '调度出库', '调度出库(关联)', '调度回库', '调度回库(关联)', '预占库存', '释放预占', '批量导入', '批量导入创建'],
+    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '部分处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消', '调度创建', '调度审批通过', '调度驳回', '调度出库', '调度出库(关联)', '调度回库', '调度回库(关联)', '预占库存', '释放预占', '批量导入', '批量导入创建', '规则校验', '规则拦截', '规则警告'],
     targetCollections: ['batches', 'requests', 'schedules', 'wastes', 'stocktakes', 'suppliers', 'cabinets', 'projects']
+  },
+  complianceRules: {
+    severityLevels: {
+      critical: { label: '严重阻断', tone: 'bad', order: 1 },
+      high: { label: '高风险', tone: 'bad', order: 2 },
+      medium: { label: '中风险', tone: 'warn', order: 3 },
+      low: { label: '低风险提示', tone: 'warn', order: 4 }
+    },
+    scenarios: {
+      batchIssue: { label: '批次出库', collections: ['requests', 'schedules'], actions: ['request-issue', 'schedules-issue'] },
+      scheduleApprove: { label: '调度审批', collections: ['schedules'], actions: ['schedules-approve'] },
+      wasteCreate: { label: '报废申请', collections: ['wastes'], actions: ['create'] },
+      wasteApprove: { label: '报废审批', collections: ['wastes'], actions: ['wastes-approve'] },
+      stocktakeConfirm: { label: '盘点确认', collections: ['stocktakes'], actions: ['stocktakes-confirm'] },
+      batchImport: { label: '批量导入', collections: ['batches'], actions: ['batches-import'] },
+      batchCreate: { label: '批次创建/入库', collections: ['batches'], actions: ['create', 'update'] },
+      scheduleCreate: { label: '调度创建', collections: ['schedules'], actions: ['create'] },
+      requestCreate: { label: '领用申请', collections: ['requests'], actions: ['create', 'request-approve'] },
+      cabinetUse: { label: '柜位使用', collections: ['batches', 'schedules'], actions: ['create', 'update'] }
+    },
+    rules: [
+      {
+        id: 'expired-batch-no-issue',
+        label: '过期批次不可出库',
+        description: '已过期的药剂批次禁止用于任何出库操作',
+        severity: 'critical',
+        scenarios: ['batchIssue', 'scheduleApprove', 'requestCreate', 'scheduleCreate'],
+        suggestion: '请更换为有效期内的批次，或对该批次执行报废流程',
+        appliesTo: 'batch',
+        checkType: 'expiry'
+      },
+      {
+        id: 'high-risk-show-requires-high-safety',
+        label: '高风险演出只能使用高安全等级批次',
+        description: '风险等级为「高」的演出项目，必须使用安全等级为「高」的药剂批次',
+        severity: 'critical',
+        scenarios: ['batchIssue', 'scheduleApprove', 'requestCreate', 'scheduleCreate'],
+        suggestion: '请更换安全等级为「高」的药剂批次，或降低演出项目风险等级评估',
+        appliesTo: 'project-batch',
+        checkType: 'safetyLevel'
+      },
+      {
+        id: 'disabled-cabinet-no-use',
+        label: '停用柜位不可入库或调度',
+        description: '状态为「停用」的柜位，禁止用于入库、调度或存放药剂',
+        severity: 'critical',
+        scenarios: ['batchCreate', 'cabinetUse', 'scheduleCreate', 'batchImport'],
+        suggestion: '请选择状态为「空闲」或「使用中」的柜位，或先将目标柜位恢复使用',
+        appliesTo: 'cabinet',
+        checkType: 'cabinetStatus'
+      },
+      {
+        id: 'supplier-expired-batch-locked',
+        label: '供应商资质过期批次需锁定',
+        description: '当供应商资质过期时，该供应商的所有在库批次应自动标记为锁定状态',
+        severity: 'high',
+        scenarios: ['batchIssue', 'scheduleApprove', 'requestCreate', 'scheduleCreate', 'batchCreate', 'batchImport'],
+        suggestion: '请先更新供应商资质并将其状态恢复为「合作中」，或更换其他合格供应商的批次',
+        appliesTo: 'supplier-batch',
+        checkType: 'supplierCert'
+      },
+      {
+        id: 'same-time-spraypoint-conflict',
+        label: '同一演出时段同一喷点不能重复申请',
+        description: '同一演出项目在相同使用时段内，同一喷点/使用位置只能有一条有效申请或调度',
+        severity: 'high',
+        scenarios: ['scheduleCreate', 'requestCreate', 'scheduleApprove'],
+        suggestion: '请调整使用时段或喷点位置，或关闭/驳回已有的冲突申请/调度单',
+        appliesTo: 'schedule-spraypoint',
+        checkType: 'timeSpraypointConflict'
+      }
+    ],
+    ruleViolationTones: {
+      'expired-batch-no-issue': 'bad',
+      'high-risk-show-requires-high-safety': 'bad',
+      'disabled-cabinet-no-use': 'bad',
+      'supplier-expired-batch-locked': 'warn',
+      'same-time-spraypoint-conflict': 'warn'
+    }
   }
 };

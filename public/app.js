@@ -25,7 +25,9 @@ const state = {
   scheduleFormRows: [{}],
   wastePrefill: null,
   expandedProject: null,
-  projectClosureSummaries: {}
+  projectClosureSummaries: {},
+  ruleViolations: [],
+  formRuleViolations: {}
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -67,10 +69,97 @@ async function api(path, options = {}) {
   const res = await fetch(path, fetchOpts);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || '请求失败');
+    const err = new Error(body.error || '请求失败');
+    if (body.violations) err.violations = body.violations;
+    if (body.ruleValidation) err.ruleValidation = body.ruleValidation;
+    if (body.details) err.details = body.details;
+    throw err;
   }
   if (res.status === 204) return null;
   return res.json();
+}
+
+async function evaluateRules(scenario, data) {
+  try {
+    return await api('/api/rules/evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scenario, data })
+    });
+  } catch (err) {
+    return { valid: true, violations: [], error: err.message };
+  }
+}
+
+function getHighestSeverity(violations) {
+  if (!violations || !violations.length) return null;
+  const order = { critical: 1, high: 2, medium: 3, low: 4 };
+  return violations.reduce((highest, v) => {
+    if (!highest) return v.severity;
+    return (order[v.severity] || 99) < (order[highest] || 99) ? v.severity : highest;
+  }, null);
+}
+
+function renderViolationBanner(validationResult) {
+  if (!validationResult || !validationResult.allViolations || !validationResult.allViolations.length) return '';
+  const highest = getHighestSeverity(validationResult.allViolations);
+  const hasBlocking = validationResult.hasBlocking || ['critical', 'high'].includes(highest);
+  const iconMap = { critical: '⛔', high: '⚠️', medium: '⚡', low: 'ℹ️' };
+  const labelMap = { critical: '严重阻断', high: '高风险拦截', medium: '中风险警告', low: '低风险提示' };
+  const suggestions = [...new Set(validationResult.allViolations.map(v => v.suggestion).filter(Boolean))];
+  const blocking = validationResult.blocking || validationResult.allViolations.filter(v => ['critical', 'high'].includes(v.severity));
+  const warnings = validationResult.warnings || validationResult.allViolations.filter(v => ['medium', 'low'].includes(v.severity));
+  const displayList = blocking.length ? blocking : warnings;
+  return `<div class="rule-violation-banner severity-${highest}">
+    <div class="violation-banner-header">
+      <span class="block-icon">${iconMap[highest] || '⚠️'}</span>
+      <span>${hasBlocking ? '合规规则拦截，操作已阻止' : '合规规则警告'}：${labelMap[highest] || ''}</span>
+      <span class="violation-severity-tag severity-tag-${highest}">${validationResult.totalViolations || validationResult.allViolations.length} 项</span>
+    </div>
+    <ul class="violation-list">
+      ${displayList.map(v => `<li class="violation-item">
+        <span class="violation-rule-label">${escapeHtml(v.ruleLabel || v.ruleId)}</span>
+        <span class="violation-context">${escapeHtml(v.context || v.message || '')}</span>
+      </li>`).join('')}
+    </ul>
+    ${suggestions.length ? `<div class="rule-suggestion-panel">
+      <span class="suggestion-icon">💡</span>
+      <div class="suggestion-content">
+        <strong>处理建议：</strong>${suggestions.map(s => escapeHtml(s)).join('；')}
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+function renderViolationChips(violations) {
+  if (!violations || !violations.length) return '';
+  return violations.map(v => `<span class="rule-violation-chip violation-${v.severity || 'low'}">
+    ${v.severity === 'critical' ? '⛔' : v.severity === 'high' ? '⚠️' : v.severity === 'medium' ? '⚡' : 'ℹ️'}
+    ${escapeHtml(v.ruleLabel || v.ruleId)}
+  </span>`).join('');
+}
+
+function renderRuleStats() {
+  const violations = state.db.ruleViolations || [];
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  violations.filter(v => !v.resolved).forEach(v => { counts[v.severity] = (counts[v.severity] || 0) + 1; });
+  return `<div class="rules-stats-row">
+    <div class="rule-stat-card critical"><span class="stat-label">严重阻断</span><span class="stat-value">${counts.critical}</span><span class="stat-trend">未处理</span></div>
+    <div class="rule-stat-card high"><span class="stat-label">高风险</span><span class="stat-value">${counts.high}</span><span class="stat-trend">未处理</span></div>
+    <div class="rule-stat-card medium"><span class="stat-label">中风险</span><span class="stat-value">${counts.medium}</span><span class="stat-trend">未处理</span></div>
+    <div class="rule-stat-card low"><span class="stat-label">低风险提示</span><span class="stat-value">${counts.low}</span><span class="stat-trend">未处理</span></div>
+  </div>`;
+}
+
+async function resolveRuleViolation(id) {
+  try {
+    await api(`/api/rule-violations/${id}/resolve`, { method: 'PATCH' });
+    await loadDb();
+    render();
+    toast('已标记为处理');
+  } catch (err) {
+    toast(err.message || '操作失败');
+  }
 }
 
 function valueByPath(source, pathName) {
@@ -668,8 +757,12 @@ function renderAlertCard(batch, view, alertType, extraInfo = '') {
 function renderRiskAlertsView(view) {
   const alertData = computeAlertData();
   const { expiringSoon, expiredNotWasted, lowStock, lockedWithOpenRequests } = alertData;
+  const ruleViolations = (state.db.ruleViolations || []).filter(v => !v.resolved);
+  const iconMap = { 'expired-batch-no-issue': 'expired', 'high-risk-show-requires-high-safety': 'safety', 'disabled-cabinet-no-use': 'cabinet', 'supplier-expired-batch-locked': 'supplier', 'same-time-spraypoint-conflict': 'conflict' };
 
   return `<section class="view" id="${view.id}">
+    ${renderRuleStats()}
+
     <div class="alert-stats">
       <div class="alert-stat alert-stat-expiring">
         <span class="alert-stat-label">30天内过期</span>
@@ -688,6 +781,37 @@ function renderRiskAlertsView(view) {
         <strong>${lockedWithOpenRequests.length}</strong>
       </div>
     </div>
+
+    ${ruleViolations.length ? `<div class="alert-group" style="margin-bottom:18px;">
+      <div class="alert-group-header">
+        <h3><span class="alert-group-icon bad">🛡️</span> 合规规则预警（未处理）</h3>
+        <span class="pill bad">${ruleViolations.length} 项</span>
+      </div>
+      <div class="alert-group-body">
+        ${ruleViolations.map(v => {
+          const typeClass = iconMap[v.ruleId] || 'info';
+          const iconEmoji = typeClass === 'expired' ? '⏰' : typeClass === 'safety' ? '🛡️' : typeClass === 'cabinet' ? '🗄️' : typeClass === 'supplier' ? '🏭' : typeClass === 'conflict' ? '⚔️' : 'ℹ️';
+          const entityLabel = v.entityType ? `${v.entityType}${v.entityId ? ` #${v.entityId}` : ''}` : '';
+          return `<div class="risk-alert-card">
+            <div class="alert-type-indicator alert-type-${typeClass}">${iconEmoji}</div>
+            <div class="risk-alert-body">
+              <div class="risk-alert-title">${escapeHtml(v.ruleLabel || v.ruleId)}</div>
+              <div class="risk-alert-meta">
+                ${entityLabel ? `<span class="meta-label">关联对象：</span><span class="meta-value">${escapeHtml(entityLabel)}</span>　` : ''}
+                <span class="meta-label">场景：</span><span class="meta-value">${escapeHtml(v.scenario || '-')}</span>
+                ${v.context ? `<br><span class="meta-label">详情：</span><span class="meta-value">${escapeHtml(v.context)}</span>` : ''}
+                ${v.detectedAt ? `<br><span class="meta-label">检测时间：</span><span class="meta-value">${escapeHtml(fmtDate(v.detectedAt))}</span>` : ''}
+                ${v.suggestion ? `<br><span class="meta-label">💡 处理建议：</span><span class="meta-value" style="color:#1d4ed8;">${escapeHtml(v.suggestion)}</span>` : ''}
+              </div>
+            </div>
+            <div class="risk-alert-actions">
+              <span class="risk-alert-severity risk-severity-${v.severity || 'medium'}">${escapeHtml(v.severityLabel || v.severity || '')}</span>
+              <button class="alert-resolve-btn" data-resolve-violation="${v.id}">标记已处理</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
 
     <div class="alert-groups">
       <div class="alert-group">
@@ -2015,6 +2139,10 @@ function renderScheduleCard(schedule, view) {
   const canIssue = schedule.status === '调度已审批' && canCurrentUser('special', 'schedules-issue');
   const canReturn = schedule.status === '调度已出库' && canCurrentUser('special', 'schedules-return');
   const canDelete = ['调度待审批', '调度已驳回'].includes(schedule.status) && canCurrentUser('delete', 'schedules');
+  const relatedViolations = (state.db.ruleViolations || []).filter(v => v.entityType === 'schedule' && v.entityId === schedule.id && !v.resolved);
+  const hasBlockingViolations = relatedViolations.some(v => ['critical', 'high'].includes(v.severity));
+  const hasWarningViolations = relatedViolations.some(v => ['medium', 'low'].includes(v.severity)) && !hasBlockingViolations;
+  const scheduleCardClass = hasBlockingViolations ? ' rule-blocked' : hasWarningViolations ? ' rule-warned' : '';
   let expandContent = '';
   if (isExpanded) {
     const detailRows = (view.detailFields || []).map(field => {
@@ -2092,11 +2220,18 @@ function renderScheduleCard(schedule, view) {
     `;
     const deleteBtn = canDelete ? `<button class="danger" data-delete-schedule="${schedule.id}" style="margin-left:auto;">删除调度单</button>` : '';
     const transactions = state.db.stockTransactions?.filter(t => t.relatedType === 'schedules' && t.relatedId === schedule.id) || [];
+    const ruleViolationsHtml = relatedViolations.length ? `
+      <div class="rule-violations-section">
+        <div class="section-title">合规规则预警</div>
+        ${renderViolationChips(relatedViolations)}
+      </div>
+    ` : '';
     expandContent = `
       <div class="schedule-detail">
         ${metaInfo}
         <div class="detail">${detailRows}</div>
         ${itemsTable}
+        ${ruleViolationsHtml}
         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
           ${actionButtons}
           ${deleteBtn}
@@ -2106,7 +2241,12 @@ function renderScheduleCard(schedule, view) {
     `;
   }
   const summaryHtml = summary ? `<p>${escapeHtml(summary)}</p>` : '';
-  return `<article class="card schedule-card">
+  const riskBadge = hasBlockingViolations
+    ? `<span class="schedule-risk-badge has-blocking">⛔ ${relatedViolations.length}项规则拦截</span>`
+    : hasWarningViolations
+    ? `<span class="schedule-risk-badge has-warning">⚠️ ${relatedViolations.length}项规则警告</span>`
+    : '';
+  return `<article class="card schedule-card${scheduleCardClass}">
     <div class="card-head" data-expand-schedule="${schedule.id}" style="cursor:pointer;">
       <div>
         <h3>${escapeHtml(title)}</h3>
@@ -2114,6 +2254,7 @@ function renderScheduleCard(schedule, view) {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         ${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}
+        ${riskBadge}
         <span class="meta">${itemsCount.length}条明细，共${totalQty}单位</span>
         <span class="meta">${isExpanded ? '▲ 收起' : '▼ 展开详情'}</span>
       </div>
@@ -3684,26 +3825,55 @@ document.addEventListener('change', (e) => {
   }
 });
 
+function showRuleViolationsInForm(formEl, err) {
+  let validationResult = err.ruleValidation;
+  if (!validationResult && err.violations) {
+    validationResult = { allViolations: err.violations, blocking: err.violations.filter(v => ['critical', 'high'].includes(v.severity)), warnings: err.violations.filter(v => ['medium', 'low'].includes(v.severity)), totalViolations: err.violations.length, hasBlocking: err.violations.some(v => ['critical', 'high'].includes(v.severity)) };
+  }
+  if (validationResult && validationResult.allViolations && validationResult.allViolations.length) {
+    let bannerContainer = formEl.querySelector('.rule-violation-banner-container');
+    if (!bannerContainer) {
+      bannerContainer = document.createElement('div');
+      bannerContainer.className = 'rule-violation-banner-container';
+      formEl.insertBefore(bannerContainer, formEl.firstChild);
+    }
+    bannerContainer.innerHTML = renderViolationBanner(validationResult);
+    return true;
+  }
+  return false;
+}
+
+function clearRuleViolationsInForm(formEl) {
+  const bannerContainer = formEl.querySelector('.rule-violation-banner-container');
+  if (bannerContainer) bannerContainer.innerHTML = '';
+}
+
 document.addEventListener('submit', async (e) => {
   const stocktakeForm = e.target.closest('[data-stocktake-form]');
   if (stocktakeForm) {
     e.preventDefault();
+    clearRuleViolationsInForm(stocktakeForm);
     const data = collectFormData(stocktakeForm);
     data.status = '录入中';
-    await api('/api/stocktakes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    state.activeModal = null;
-    await loadDb();
-    render();
+    try {
+      await api('/api/stocktakes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      state.activeModal = null;
+      await loadDb();
+      render();
+    } catch (err) {
+      if (!showRuleViolationsInForm(stocktakeForm, err)) toast(err.message || '保存失败');
+    }
     return;
   }
 
   const wasteForm = e.target.closest('[data-waste-form]');
   if (wasteForm) {
     e.preventDefault();
+    clearRuleViolationsInForm(wasteForm);
     const data = collectFormData(wasteForm);
     const qtyInput = wasteForm.querySelector('input[name="quantity"]');
     const maxQtyInput = wasteForm.querySelector('input[name="maxQuantity"]');
@@ -3731,7 +3901,7 @@ document.addEventListener('submit', async (e) => {
       await loadDb();
       render();
     } catch (err) {
-      toast(err.message || '提交失败');
+      if (!showRuleViolationsInForm(wasteForm, err)) toast(err.message || '提交失败');
     }
     return;
   }
@@ -3739,6 +3909,7 @@ document.addEventListener('submit', async (e) => {
   const crudForm = e.target.closest('[data-crud-form]');
   if (crudForm) {
     e.preventDefault();
+    clearRuleViolationsInForm(crudForm);
     const collection = crudForm.dataset.crudForm;
     const editId = crudForm.dataset.editId;
     const data = collectFormData(crudForm);
@@ -3774,7 +3945,7 @@ document.addEventListener('submit', async (e) => {
       await loadDb();
       render();
     } catch (err) {
-      toast(err.message || '保存失败');
+      if (!showRuleViolationsInForm(crudForm, err)) toast(err.message || '保存失败');
     }
     return;
   }
@@ -3782,15 +3953,30 @@ document.addEventListener('submit', async (e) => {
   const scheduleForm = e.target.closest('[data-schedule-form]');
   if (scheduleForm) {
     e.preventDefault();
+    clearRuleViolationsInForm(scheduleForm);
     const data = collectScheduleFormData();
-    await api('/api/schedules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    state.scheduleFormRows = [{}];
-    await loadDb();
-    render();
+    try {
+      await api('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      state.scheduleFormRows = [{}];
+      await loadDb();
+      render();
+    } catch (err) {
+      if (!showRuleViolationsInForm(scheduleForm, err)) toast(err.message || '提交失败');
+    }
+    return;
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const resolveBtn = e.target.closest('[data-resolve-violation]');
+  if (resolveBtn) {
+    e.preventDefault();
+    const id = resolveBtn.dataset.resolveViolation;
+    await resolveRuleViolation(id);
     return;
   }
 });

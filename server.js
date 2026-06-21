@@ -634,6 +634,11 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
       history: [stamp('创建申请', `批次：${batch.name} / ${batch.batchNo}，申请领用：${req.body.quantity}${batch.unit || ''}`, operator)]
     };
+    const ruleResult = validateRules(db, 'requestCreate', item, { entityType: 'request', entity: item, operator });
+    if (!ruleResult.valid) {
+      const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.projectName || ''} ${v.suggestion}`).join('；');
+      return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    }
   } else if (collection === 'batches') {
     const defaultNote = req.body.note || req.body.memo || '';
     const cabinetId = req.body.cabinetId;
@@ -650,6 +655,11 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
       history: [stamp('创建', defaultNote, operator)]
     };
+    const ruleResult = validateRules(db, 'batchCreate', item, { entityType: 'batch', entity: item, operator });
+    if (!ruleResult.valid) {
+      const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.cabinetCode || ''} ${v.suggestion}`).join('；');
+      return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    }
     writeStockTransaction(db, {
       batchId: item.id,
       type: STOCK_TRANSACTION_TYPES.STOCK_IN,
@@ -823,6 +833,20 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
   if (!item) return res.status(404).json({ error: 'not found' });
   const preCheck = preActionCheck(db, action, item);
   if (preCheck.error) return res.status(409).json({ error: preCheck.error });
+
+  let ruleScenario = null;
+  let ruleEntityType = null;
+  if (action.id === 'request-issue') { ruleScenario = 'batchIssue'; ruleEntityType = 'request'; }
+  else if (action.id === 'request-approve') { ruleScenario = 'requestCreate'; ruleEntityType = 'request'; }
+  else if (action.id === 'batch-waste') { ruleScenario = 'wasteCreate'; ruleEntityType = 'batch'; }
+
+  if (ruleScenario && ruleEntityType) {
+    const ruleResult = validateRules(db, ruleScenario, item, { entityType: ruleEntityType, entity: item, operator });
+    if (!ruleResult.valid) {
+      const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.projectName || ''} ${v.suggestion}`).join('；');
+      return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    }
+  }
 
   const beforeItem = { ...item };
   let beforeRelated = null;
@@ -1267,6 +1291,12 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
     return res.status(409).json({ error: '盘点单还没有录入任何批次，请先完成录入' });
   }
 
+  const ruleResult = validateRules(db, 'stocktakeConfirm', stocktake, { entityType: 'stocktake', entity: stocktake, operator: req.currentUser });
+  if (!ruleResult.valid) {
+    const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.cabinetCode || v.context?.batchNo || ''} ${v.suggestion}`).join('；');
+    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+  }
+
   const operator = req.currentUser;
   const now = new Date().toISOString();
   const confirmedBy = `${operator.name}（${operator.roleLabel}）`;
@@ -1406,6 +1436,8 @@ app.post('/api/wastes/:id/approve', requireUser, async (req, res) => {
   const waste = db.wastes?.find((entry) => entry.id === id);
   if (!waste) return res.status(404).json({ error: '报废单不存在' });
   if (waste.status !== '待审批') return res.status(409).json({ error: '只有待审批状态的报废单可以审批' });
+
+  validateRules(db, 'wasteApprove', waste, { entityType: 'waste', entity: waste, operator: req.currentUser });
 
   const batch = db.batches.find((b) => b.id === waste.batchId);
   if (!batch) return res.status(409).json({ error: '关联批次不存在' });
@@ -1884,6 +1916,7 @@ function validateBatchRow(row, headers, db, rowIndex) {
     supplier: null,
     cabinet: null
   };
+  const ruleViolations = [];
 
   headers.forEach((header, idx) => {
     const field = normalizeHeader(header);
@@ -1977,6 +2010,21 @@ function validateBatchRow(row, headers, db, rowIndex) {
     }
   }
 
+  if (rowType === 'valid' || rowType === 'pending') {
+    const ruleCheck = validateRules(db, 'batchImport', batchData, { entityType: 'batchImport', entity: batchData });
+    if (ruleCheck.allViolations.length > 0) {
+      ruleCheck.allViolations.forEach((v) => {
+        ruleViolations.push(v);
+        if (v.severity === 'critical' || v.severity === 'high') {
+          errors.push(`[${v.severityLabel}] ${v.ruleLabel}：${v.suggestion}`);
+        }
+      });
+      if (ruleCheck.hasBlocking) {
+        rowType = 'error';
+      }
+    }
+  }
+
   return {
     rowIndex,
     data: batchData,
@@ -1988,7 +2036,8 @@ function validateBatchRow(row, headers, db, rowIndex) {
     isError: rowType === 'error',
     pendingCreate,
     supplierName: data.supplier || '',
-    cabinetName: data.cabinet || ''
+    cabinetName: data.cabinet || '',
+    ruleViolations
   };
 }
 
@@ -2494,6 +2543,599 @@ app.get('/api/cabinets/:id/occupancy', async (req, res) => {
 
 const LEVEL_RANK = { '低': 1, '中': 2, '高': 3 };
 
+const RULE_VIOLATION_COLLECTION = 'ruleViolations';
+
+function buildRuleViolation(rule, context, extra = {}) {
+  const severityInfo = config.complianceRules?.severityLevels?.[rule.severity] || { label: rule.severity, tone: 'warn', order: 99 };
+  return {
+    ruleId: rule.id,
+    ruleLabel: rule.label,
+    description: rule.description,
+    severity: rule.severity,
+    severityLabel: severityInfo.label,
+    severityTone: severityInfo.tone,
+    severityOrder: severityInfo.order,
+    suggestion: rule.suggestion,
+    context,
+    ...extra,
+    detectedAt: new Date().toISOString()
+  };
+}
+
+function checkRuleExpiredBatch(db, batch, now) {
+  if (!batch || !batch.expiresAt) return null;
+  const expireDate = new Date(batch.expiresAt);
+  if (expireDate < now) {
+    const daysExpired = Math.ceil((now - expireDate) / (1000 * 60 * 60 * 24));
+    return {
+      batchId: batch.id,
+      batchName: batch.name,
+      batchNo: batch.batchNo,
+      expiresAt: batch.expiresAt,
+      daysExpired
+    };
+  }
+  return null;
+}
+
+function checkRuleSafetyLevel(db, project, batch) {
+  if (!project || !batch) return null;
+  const projectRisk = project.riskLevel || '低';
+  const batchSafety = batch.safetyLevel || '低';
+  if (LEVEL_RANK[projectRisk] === 3 && LEVEL_RANK[batchSafety] < 3) {
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      projectRiskLevel: projectRisk,
+      batchId: batch.id,
+      batchName: batch.name,
+      batchNo: batch.batchNo,
+      batchSafetyLevel: batchSafety
+    };
+  }
+  return null;
+}
+
+function checkRuleCabinetDisabled(db, cabinetId) {
+  if (!cabinetId) return null;
+  const cabinet = db.cabinets?.find((c) => c.id === cabinetId);
+  if (!cabinet) return null;
+  if (cabinet.status === '停用') {
+    return {
+      cabinetId: cabinet.id,
+      cabinetCode: cabinet.code,
+      cabinetArea: cabinet.area,
+      cabinetStatus: cabinet.status
+    };
+  }
+  return null;
+}
+
+function checkRuleSupplierExpired(db, batch) {
+  if (!batch || !batch.supplierId) return null;
+  const supplier = db.suppliers?.find((s) => s.id === batch.supplierId);
+  if (!supplier) return null;
+  const now = new Date();
+  let isExpired = supplier.status === '资质过期';
+  if (!isExpired && supplier.certExpiresAt) {
+    const certDate = new Date(supplier.certExpiresAt);
+    if (certDate < now) {
+      isExpired = true;
+    }
+  }
+  if (isExpired) {
+    return {
+      supplierId: supplier.id,
+      supplierName: supplier.name,
+      supplierStatus: supplier.status,
+      certExpiresAt: supplier.certExpiresAt || '',
+      batchId: batch.id,
+      batchName: batch.name,
+      batchNo: batch.batchNo
+    };
+  }
+  return null;
+}
+
+function checkRuleTimeSpraypointConflict(db, projectId, useWindow, sprayPoint, excludeScheduleId = null, excludeRequestId = null) {
+  if (!projectId || !useWindow || !sprayPoint) return null;
+  const conflicts = [];
+  const normalizedWindow = String(useWindow).trim();
+  const normalizedSpray = String(sprayPoint).trim();
+
+  (db.schedules || []).forEach((s) => {
+    if (excludeScheduleId && s.id === excludeScheduleId) return;
+    if (!['调度待审批', '调度已审批', '调度已出库'].includes(s.status)) return;
+    if (s.projectId !== projectId) return;
+    if (String(s.useWindow || '').trim() !== normalizedWindow) return;
+    (s.items || []).forEach((it) => {
+      if (String(it.sprayPoint || '').trim() === normalizedSpray) {
+        conflicts.push({
+          type: 'schedule',
+          id: s.id,
+          code: s.code,
+          status: s.status
+        });
+      }
+    });
+  });
+
+  (db.requests || []).forEach((r) => {
+    if (excludeRequestId && r.id === excludeRequestId) return;
+    if (!['待审批', '已审批', '已出库'].includes(r.status)) return;
+    if (r.projectId !== projectId) return;
+    if (String(r.useWindow || '').trim() !== normalizedWindow) return;
+    conflicts.push({
+      type: 'request',
+      id: r.id,
+      showName: r.showName,
+      status: r.status
+    });
+  });
+
+  if (conflicts.length > 0) {
+    return {
+      projectId,
+      useWindow: normalizedWindow,
+      sprayPoint: normalizedSpray,
+      conflicts
+    };
+  }
+  return null;
+}
+
+function evaluateRulesForBatch(db, scenario, batch, options = {}) {
+  const violations = [];
+  const rules = config.complianceRules?.rules || [];
+  const now = new Date();
+  const applicableRules = rules.filter((r) => r.scenarios?.includes(scenario));
+
+  for (const rule of applicableRules) {
+    if (rule.checkType === 'expiry' && rule.appliesTo === 'batch') {
+      const result = checkRuleExpiredBatch(db, batch, now);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'expiry' }));
+    }
+    if (rule.checkType === 'supplierCert' && rule.appliesTo === 'supplier-batch') {
+      const result = checkRuleSupplierExpired(db, batch);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'supplierCert' }));
+    }
+  }
+  return violations;
+}
+
+function evaluateRulesForSchedule(db, scenario, schedule, options = {}) {
+  const violations = [];
+  const rules = config.complianceRules?.rules || [];
+  const now = new Date();
+  const applicableRules = rules.filter((r) => r.scenarios?.includes(scenario));
+  const project = db.projects?.find((p) => p.id === schedule.projectId);
+
+  for (const rule of applicableRules) {
+    if (rule.checkType === 'expiry' && rule.appliesTo === 'batch') {
+      (schedule.items || []).forEach((item, idx) => {
+        const batch = db.batches?.find((b) => b.id === item.batchId);
+        const result = checkRuleExpiredBatch(db, batch, now);
+        if (result) {
+          violations.push(buildRuleViolation(rule, { ...result, lineNo: idx + 1, sprayPoint: item.sprayPoint }, { checkType: 'expiry' }));
+        }
+      });
+    }
+    if (rule.checkType === 'safetyLevel' && rule.appliesTo === 'project-batch') {
+      (schedule.items || []).forEach((item, idx) => {
+        const batch = db.batches?.find((b) => b.id === item.batchId);
+        const result = checkRuleSafetyLevel(db, project, batch);
+        if (result) {
+          violations.push(buildRuleViolation(rule, { ...result, lineNo: idx + 1, sprayPoint: item.sprayPoint }, { checkType: 'safetyLevel' }));
+        }
+      });
+    }
+    if (rule.checkType === 'supplierCert' && rule.appliesTo === 'supplier-batch') {
+      (schedule.items || []).forEach((item, idx) => {
+        const batch = db.batches?.find((b) => b.id === item.batchId);
+        const result = checkRuleSupplierExpired(db, batch);
+        if (result) {
+          violations.push(buildRuleViolation(rule, { ...result, lineNo: idx + 1, sprayPoint: item.sprayPoint }, { checkType: 'supplierCert' }));
+        }
+      });
+    }
+    if (rule.checkType === 'timeSpraypointConflict' && rule.appliesTo === 'schedule-spraypoint') {
+      (schedule.items || []).forEach((item, idx) => {
+        const result = checkRuleTimeSpraypointConflict(
+          db,
+          schedule.projectId,
+          schedule.useWindow,
+          item.sprayPoint,
+          schedule.id,
+          null
+        );
+        if (result) {
+          violations.push(buildRuleViolation(rule, { ...result, lineNo: idx + 1 }, { checkType: 'timeSpraypointConflict' }));
+        }
+      });
+    }
+  }
+  return violations;
+}
+
+function evaluateRulesForRequest(db, scenario, request, options = {}) {
+  const violations = [];
+  const rules = config.complianceRules?.rules || [];
+  const now = new Date();
+  const applicableRules = rules.filter((r) => r.scenarios?.includes(scenario));
+  const batch = db.batches?.find((b) => b.id === request.batchId);
+  const project = db.projects?.find((p) => p.id === request.projectId);
+
+  for (const rule of applicableRules) {
+    if (rule.checkType === 'expiry' && rule.appliesTo === 'batch') {
+      const result = checkRuleExpiredBatch(db, batch, now);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'expiry' }));
+    }
+    if (rule.checkType === 'safetyLevel' && rule.appliesTo === 'project-batch') {
+      const result = checkRuleSafetyLevel(db, project, batch);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'safetyLevel' }));
+    }
+    if (rule.checkType === 'supplierCert' && rule.appliesTo === 'supplier-batch') {
+      const result = checkRuleSupplierExpired(db, batch);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'supplierCert' }));
+    }
+    if (rule.checkType === 'timeSpraypointConflict' && rule.appliesTo === 'schedule-spraypoint') {
+      const sprayPoint = request.sprayPoint || request.venue || '';
+      const result = checkRuleTimeSpraypointConflict(
+        db,
+        request.projectId,
+        request.useWindow,
+        sprayPoint,
+        null,
+        request.id
+      );
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'timeSpraypointConflict' }));
+    }
+  }
+  return violations;
+}
+
+function evaluateRulesForWaste(db, scenario, waste, options = {}) {
+  const violations = [];
+  const rules = config.complianceRules?.rules || [];
+  const applicableRules = rules.filter((r) => r.scenarios?.includes(scenario));
+  const batch = db.batches?.find((b) => b.id === waste.batchId);
+  const now = new Date();
+
+  for (const rule of applicableRules) {
+    if (rule.checkType === 'expiry' && rule.appliesTo === 'batch') {
+      const result = checkRuleExpiredBatch(db, batch, now);
+      if (result) {
+        violations.push(buildRuleViolation(rule, result, {
+          checkType: 'expiry',
+          note: '报废过期批次属于合规操作，仅供参考'
+        }));
+      }
+    }
+  }
+  return violations;
+}
+
+function evaluateRulesForStocktake(db, scenario, stocktake, options = {}) {
+  const violations = [];
+  const rules = config.complianceRules?.rules || [];
+  const applicableRules = rules.filter((r) => r.scenarios?.includes(scenario));
+  const now = new Date();
+
+  for (const rule of applicableRules) {
+    if (rule.checkType === 'cabinetStatus' && rule.appliesTo === 'cabinet' && stocktake.cabinetId) {
+      const result = checkRuleCabinetDisabled(db, stocktake.cabinetId);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'cabinetStatus' }));
+    }
+  }
+
+  (stocktake.items || []).forEach((item, idx) => {
+    const batch = db.batches?.find((b) => b.id === item.batchId);
+    if (!batch) return;
+    for (const rule of applicableRules) {
+      if (rule.checkType === 'expiry' && rule.appliesTo === 'batch') {
+        const result = checkRuleExpiredBatch(db, batch, now);
+        if (result) {
+          violations.push(buildRuleViolation(rule, { ...result, lineNo: idx + 1 }, { checkType: 'expiry', note: '盘点时发现过期批次，建议报废' }));
+        }
+      }
+      if (rule.checkType === 'supplierCert' && rule.appliesTo === 'supplier-batch') {
+        const result = checkRuleSupplierExpired(db, batch);
+        if (result) {
+          violations.push(buildRuleViolation(rule, { ...result, lineNo: idx + 1 }, { checkType: 'supplierCert', note: '盘点时发现供应商资质过期批次，建议锁定' }));
+        }
+      }
+    }
+  });
+  return violations;
+}
+
+function evaluateRulesForBatchImport(db, scenario, rowData, options = {}) {
+  const violations = [];
+  const rules = config.complianceRules?.rules || [];
+  const applicableRules = rules.filter((r) => r.scenarios?.includes(scenario));
+  const now = new Date();
+
+  const pseudoBatch = {
+    id: 'import-preview',
+    name: rowData.name,
+    batchNo: rowData.batchNo,
+    expiresAt: rowData.expiresAt,
+    safetyLevel: rowData.safetyLevel,
+    supplierId: rowData.supplierId,
+    cabinetId: rowData.cabinetId,
+    status: rowData.status || '可用'
+  };
+
+  for (const rule of applicableRules) {
+    if (rule.checkType === 'expiry' && rule.appliesTo === 'batch') {
+      const result = checkRuleExpiredBatch(db, pseudoBatch, now);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'expiry' }));
+    }
+    if (rule.checkType === 'cabinetStatus' && rule.appliesTo === 'cabinet') {
+      const result = checkRuleCabinetDisabled(db, rowData.cabinetId);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'cabinetStatus' }));
+    }
+    if (rule.checkType === 'supplierCert' && rule.appliesTo === 'supplier-batch') {
+      const supplier = rowData.supplierId ? { ...pseudoBatch } : null;
+      const result = checkRuleSupplierExpired(db, pseudoBatch);
+      if (result) violations.push(buildRuleViolation(rule, result, { checkType: 'supplierCert' }));
+    }
+  }
+  return violations;
+}
+
+function validateRules(db, scenario, contextData, options = {}) {
+  const { entityType, entity, operator } = options;
+  let violations = [];
+
+  switch (entityType) {
+    case 'batch':
+      violations = evaluateRulesForBatch(db, scenario, entity, options);
+      break;
+    case 'schedule':
+      violations = evaluateRulesForSchedule(db, scenario, entity, options);
+      break;
+    case 'request':
+      violations = evaluateRulesForRequest(db, scenario, entity, options);
+      break;
+    case 'waste':
+      violations = evaluateRulesForWaste(db, scenario, entity, options);
+      break;
+    case 'stocktake':
+      violations = evaluateRulesForStocktake(db, scenario, entity, options);
+      break;
+    case 'batchImport':
+      violations = evaluateRulesForBatchImport(db, scenario, entity, options);
+      break;
+    default:
+      break;
+  }
+
+  const blocking = violations.filter((v) => v.severity === 'critical' || v.severity === 'high');
+  const warnings = violations.filter((v) => v.severity === 'medium' || v.severity === 'low');
+  const hasBlocking = blocking.length > 0;
+
+  const result = {
+    valid: !hasBlocking,
+    hasBlocking,
+    hasWarnings: warnings.length > 0,
+    totalViolations: violations.length,
+    blockingCount: blocking.length,
+    warningCount: warnings.length,
+    blocking,
+    warnings,
+    allViolations: violations.sort((a, b) => a.severityOrder - b.severityOrder),
+    scenario,
+    entityType,
+    evaluatedAt: new Date().toISOString()
+  };
+
+  if (violations.length > 0 && operator) {
+    writeRuleViolationAudit(db, result, operator, contextData);
+  }
+
+  return result;
+}
+
+function writeRuleViolationAudit(db, validationResult, operator, contextData) {
+  if (!db[AUDIT_COLLECTION]) db[AUDIT_COLLECTION] = [];
+  const actionType = validationResult.hasBlocking ? '规则拦截' : '规则警告';
+  const violationSummary = validationResult.allViolations
+    .slice(0, 5)
+    .map((v) => `[${v.severityLabel}] ${v.ruleLabel}`)
+    .join('；');
+  const log = {
+    id: `${AUDIT_COLLECTION}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    actionType,
+    targetCollection: validationResult.entityType || 'rules',
+    targetId: contextData?.id || 'rule-evaluation',
+    targetLabel: `${validationResult.scenario} 规则校验`,
+    changes: {
+      scenario: validationResult.scenario,
+      blockingCount: validationResult.blockingCount,
+      warningCount: validationResult.warningCount,
+      violations: validationResult.allViolations.map((v) => ({
+        ruleId: v.ruleId,
+        ruleLabel: v.ruleLabel,
+        severity: v.severity,
+        context: v.context
+      }))
+    },
+    note: `命中 ${validationResult.totalViolations} 条规则：${violationSummary}${validationResult.allViolations.length > 5 ? `（共${validationResult.allViolations.length}条）` : ''}`,
+    operator: operatorDisplayName(operator),
+    operatorInfo: operator && typeof operator === 'object' && operator.id ? operator : null,
+    createdAt: new Date().toISOString()
+  };
+  db[AUDIT_COLLECTION].unshift(log);
+
+  if (!db[RULE_VIOLATION_COLLECTION]) db[RULE_VIOLATION_COLLECTION] = [];
+  for (const v of validationResult.allViolations) {
+    db[RULE_VIOLATION_COLLECTION].unshift({
+      id: `${RULE_VIOLATION_COLLECTION}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+      ...v,
+      scenario: validationResult.scenario,
+      entityType: validationResult.entityType,
+      operator: operator ? { id: operator.id, name: operator.name, role: operator.role } : null,
+      resolved: false,
+      resolvedAt: null,
+      resolvedBy: null,
+      resolutionNote: null
+    });
+  }
+}
+
+function getRiskAlertsSummary(db) {
+  const now = new Date();
+  const expiringDays = config.alerts?.expiringDays || 30;
+  const expiringCutoff = new Date(now.getTime() + expiringDays * 24 * 60 * 60 * 1000);
+  const alerts = [];
+
+  for (const batch of db.batches || []) {
+    if (batch.status === '已报废') continue;
+    const batchAlerts = [];
+
+    if (batch.expiresAt) {
+      const expireDate = new Date(batch.expiresAt);
+      if (expireDate < now) {
+        const daysExpired = Math.ceil((now - expireDate) / (1000 * 60 * 60 * 24));
+        batchAlerts.push({
+          ruleId: 'expired-batch-no-issue',
+          type: 'expired',
+          label: `已过期${daysExpired}天`,
+          severity: 'critical',
+          suggestion: config.complianceRules?.rules?.find((r) => r.id === 'expired-batch-no-issue')?.suggestion || '请执行报废流程'
+        });
+      } else if (expireDate <= expiringCutoff) {
+        const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+        batchAlerts.push({
+          ruleId: 'expired-batch-no-issue',
+          type: 'expiring',
+          label: `临期（还有${daysLeft}天）`,
+          severity: 'medium',
+          suggestion: '请尽快安排使用或申请延期'
+        });
+      }
+    }
+
+    if (batch.supplierId) {
+      const supplier = db.suppliers?.find((s) => s.id === batch.supplierId);
+      if (supplier) {
+        let certExpired = supplier.status === '资质过期';
+        if (!certExpired && supplier.certExpiresAt) {
+          const certDate = new Date(supplier.certExpiresAt);
+          if (certDate < now) certExpired = true;
+        }
+        if (certExpired) {
+          batchAlerts.push({
+            ruleId: 'supplier-expired-batch-locked',
+            type: 'supplier-cert',
+            label: `供应商「${supplier.name}」资质过期`,
+            severity: 'high',
+            suggestion: config.complianceRules?.rules?.find((r) => r.id === 'supplier-expired-batch-locked')?.suggestion || '请更新供应商资质'
+          });
+        }
+      }
+    }
+
+    if (batch.cabinetId) {
+      const cabinet = db.cabinets?.find((c) => c.id === batch.cabinetId);
+      if (cabinet && cabinet.status === '停用') {
+        batchAlerts.push({
+          ruleId: 'disabled-cabinet-no-use',
+          type: 'cabinet-disabled',
+          label: `存放柜位「${cabinet.code}」已停用`,
+          severity: 'high',
+          suggestion: config.complianceRules?.rules?.find((r) => r.id === 'disabled-cabinet-no-use')?.suggestion || '请转移至可用柜位'
+        });
+      }
+    }
+
+    if (batchAlerts.length > 0) {
+      alerts.push({
+        batchId: batch.id,
+        batchName: batch.name,
+        batchNo: batch.batchNo,
+        status: batch.status,
+        safetyLevel: batch.safetyLevel,
+        quantity: batch.quantity,
+        unit: batch.unit || '',
+        expiresAt: batch.expiresAt,
+        supplierId: batch.supplierId,
+        cabinetId: batch.cabinetId,
+        alerts: batchAlerts,
+        highestSeverity: batchAlerts.reduce((highest, a) => {
+          const order = config.complianceRules?.severityLevels?.[a.severity]?.order || 99;
+          return order < (config.complianceRules?.severityLevels?.[highest]?.order || 99) ? a.severity : highest;
+        }, batchAlerts[0].severity)
+      });
+    }
+  }
+
+  for (const project of db.projects || []) {
+    if (!['筹备中', '进行中'].includes(project.status)) continue;
+    if (project.riskLevel !== '高') continue;
+    const relatedSchedules = (db.schedules || []).filter(
+      (s) => s.projectId === project.id && ['调度待审批', '调度已审批', '调度已出库'].includes(s.status)
+    );
+    const relatedRequests = (db.requests || []).filter(
+      (r) => r.projectId === project.id && ['待审批', '已审批', '已出库'].includes(r.status)
+    );
+    for (const sched of relatedSchedules) {
+      for (const item of sched.items || []) {
+        const batch = db.batches?.find((b) => b.id === item.batchId);
+        if (batch && batch.safetyLevel !== '高') {
+          alerts.push({
+            type: 'project-safety-mismatch',
+            projectId: project.id,
+            projectName: project.name,
+            scheduleId: sched.id,
+            scheduleCode: sched.code,
+            batchId: batch.id,
+            batchName: batch.name,
+            batchNo: batch.batchNo,
+            alerts: [{
+              ruleId: 'high-risk-show-requires-high-safety',
+              type: 'safety-mismatch',
+              label: `高风险演出「${project.name}」使用了非高安全等级批次`,
+              severity: 'critical',
+              suggestion: config.complianceRules?.rules?.find((r) => r.id === 'high-risk-show-requires-high-safety')?.suggestion || '请更换高安全等级批次'
+            }],
+            highestSeverity: 'critical'
+          });
+        }
+      }
+    }
+    for (const req of relatedRequests) {
+      const batch = db.batches?.find((b) => b.id === req.batchId);
+      if (batch && batch.safetyLevel !== '高') {
+        alerts.push({
+          type: 'project-safety-mismatch',
+          projectId: project.id,
+          projectName: project.name,
+          requestId: req.id,
+          batchId: batch.id,
+          batchName: batch.name,
+          batchNo: batch.batchNo,
+          alerts: [{
+            ruleId: 'high-risk-show-requires-high-safety',
+            type: 'safety-mismatch',
+            label: `高风险演出「${project.name}」使用了非高安全等级批次`,
+            severity: 'critical',
+            suggestion: config.complianceRules?.rules?.find((r) => r.id === 'high-risk-show-requires-high-safety')?.suggestion || '请更换高安全等级批次'
+          }],
+          highestSeverity: 'critical'
+        });
+      }
+    }
+  }
+
+  return alerts.sort((a, b) => {
+    const orderA = config.complianceRules?.severityLevels?.[a.highestSeverity]?.order || 99;
+    const orderB = config.complianceRules?.severityLevels?.[b.highestSeverity]?.order || 99;
+    return orderA - orderB;
+  });
+}
+
 function getBatchAvailableQuantity(batch) {
   const qty = Number(batch.quantity || 0);
   const reserved = Number(batch.reservedQuantity || 0);
@@ -2698,6 +3340,12 @@ app.post('/api/schedules', requireUser, async (req, res) => {
     history: [stamp('调度创建', `调度单：${code}，演出：${project.name || ''}，共${validated.length}条明细，合计${totalQty}单位`, op)]
   };
 
+  const ruleResult = validateRules(db, 'scheduleCreate', schedule, { entityType: 'schedule', entity: schedule, operator: op });
+  if (!ruleResult.valid) {
+    const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}${v.context?.lineNo ? `(第${v.context.lineNo}行)` : ''}：${v.context?.batchNo || v.context?.sprayPoint || v.context?.projectName || ''} ${v.suggestion}`).join('；');
+    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+  }
+
   db.schedules.push(schedule);
   writeAuditLog(db, {
     actionType: '调度创建',
@@ -2720,6 +3368,12 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
   if (!schedule) return res.status(404).json({ error: '调度单不存在' });
   if (schedule.status !== '调度待审批') return res.status(409).json({ error: '只有调度待审批状态可以审批' });
 
+  const ruleResult = validateRules(db, 'scheduleApprove', schedule, { entityType: 'schedule', entity: schedule, operator: req.currentUser });
+  if (!ruleResult.valid) {
+    const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}${v.context?.lineNo ? `(第${v.context.lineNo}行)` : ''}：${v.context?.batchNo || v.context?.sprayPoint || v.context?.projectName || ''} ${v.suggestion}`).join('；');
+    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+  }
+
   const now = new Date();
   const errors = [];
   (schedule.items || []).forEach((item, idx) => {
@@ -2731,12 +3385,6 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
     }
     if (batch.status !== '可用') {
       errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」状态为「${batch.status}」，不可出库`);
-    }
-    if (batch.expiresAt) {
-      const expire = new Date(batch.expiresAt);
-      if (expire < now) {
-        errors.push(`第${lineNo}行：批次「${batch.name}/${batch.batchNo}」已过期`);
-      }
     }
     if (LEVEL_RANK[batch.safetyLevel] < LEVEL_RANK[item.safetyLevel]) {
       errors.push(`第${lineNo}行：批次安全等级(${batch.safetyLevel})低于所需等级(${item.safetyLevel})`);
@@ -2800,6 +3448,12 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
   const schedule = db.schedules?.find((s) => s.id === id);
   if (!schedule) return res.status(404).json({ error: '调度单不存在' });
   if (schedule.status !== '调度已审批') return res.status(409).json({ error: '只有调度已审批状态可以出库' });
+
+  const ruleResult = validateRules(db, 'batchIssue', schedule, { entityType: 'schedule', entity: schedule, operator: req.currentUser });
+  if (!ruleResult.valid) {
+    const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}${v.context?.lineNo ? `(第${v.context.lineNo}行)` : ''}：${v.context?.batchNo || v.context?.sprayPoint || ''} ${v.suggestion}`).join('；');
+    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+  }
 
   const now = new Date();
   const errors = [];
@@ -3343,6 +3997,85 @@ app.get('/api/projects/closure-summary', requireUser, async (req, res) => {
     };
   });
   res.json(summaries);
+});
+
+app.post('/api/rules/evaluate', requireUser, async (req, res) => {
+  const db = await readDb();
+  let { scenario, entityType, entity, data } = req.body;
+  if (!scenario) {
+    return res.status(400).json({ error: '缺少必填参数：scenario' });
+  }
+  if (!entity && data) entity = data;
+  if (!entityType && data) {
+    if (data.batchId || data.safetyLevel) entityType = 'batch';
+    else if (data.projectId || data.items) entityType = 'schedule';
+    else if (data.title || data.batchId) entityType = 'request';
+    else if (data.batchId || data.reason) entityType = 'waste';
+    else if (data.items) entityType = 'stocktake';
+    else if (data.rows) entityType = 'batchImport';
+  }
+  if (!entityType) {
+    return res.status(400).json({ error: '缺少必填参数：entityType，或提供可推断类型的 data' });
+  }
+  if (!entity) {
+    return res.status(400).json({ error: '缺少必填参数：entity 或 data' });
+  }
+  const result = validateRules(db, scenario, entity, { entityType, entity, operator: req.currentUser });
+  res.json(result);
+});
+
+app.get('/api/rules', (req, res) => {
+  res.json(config.complianceRules || {});
+});
+
+app.get('/api/risk-alerts', requireUser, async (req, res) => {
+  const db = await readDb();
+  const alerts = getRiskAlertsSummary(db);
+  const stats = {
+    total: alerts.length,
+    critical: alerts.filter((a) => a.highestSeverity === 'critical').length,
+    high: alerts.filter((a) => a.highestSeverity === 'high').length,
+    medium: alerts.filter((a) => a.highestSeverity === 'medium').length,
+    low: alerts.filter((a) => a.highestSeverity === 'low').length
+  };
+  res.json({ alerts, stats });
+});
+
+app.get('/api/rule-violations', requireUser, async (req, res) => {
+  const db = await readDb();
+  const violations = db[RULE_VIOLATION_COLLECTION] || [];
+  const unresolved = violations.filter((v) => !v.resolved);
+  const resolved = violations.filter((v) => v.resolved);
+  res.json({
+    total: violations.length,
+    unresolvedCount: unresolved.length,
+    resolvedCount: resolved.length,
+    unresolved: unresolved.slice(0, 100),
+    resolved: resolved.slice(0, 50)
+  });
+});
+
+app.patch('/api/rule-violations/:id/resolve', requireUser, async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const { resolutionNote } = req.body;
+  const violation = (db[RULE_VIOLATION_COLLECTION] || []).find((v) => v.id === id);
+  if (!violation) return res.status(404).json({ error: '违规记录不存在' });
+  const operator = req.currentUser;
+  violation.resolved = true;
+  violation.resolvedAt = new Date().toISOString();
+  violation.resolvedBy = { id: operator.id, name: operator.name, role: operator.role };
+  violation.resolutionNote = resolutionNote || '';
+  writeAuditLog(db, {
+    actionType: '规则警告',
+    collection: RULE_VIOLATION_COLLECTION,
+    targetId: id,
+    targetItem: violation,
+    note: `规则违规已处理：${violation.ruleLabel}${resolutionNote ? '，备注：' + resolutionNote : ''}`,
+    operator
+  });
+  await writeDb(db);
+  res.json(violation);
 });
 
 app.listen(PORT, () => {

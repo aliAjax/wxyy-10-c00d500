@@ -2571,3 +2571,447 @@ select[name="cabinetId"] option:disabled {
   .dr-note::before { content: '备注'; }
 }
 
+/* ========== 合规规则引擎样式 ========== */
+
+.rule-violation-banner {
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rule-violation-banner.severity-critical {
+  background: linear-gradient(135deg, rgba(220, 53, 69, 0.08), rgba(220, 53, 69, 0.03));
+  border-color: rgba(220, 53, 69, 0.35);
+}
+
+.rule-violation-banner.severity-high {
+  background: linear-gradient(135deg, rgba(253, 126, 20, 0.08), rgba(253, 126, 20, 0.03));
+  border-color: rgba(253, 126, 20, 0.35);
+}
+
+.rule-violation-banner.severity-medium {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.08), rgba(255, 193, 7, 0.03));
+  border-color: rgba(255, 193, 7, 0.4);
+}
+
+.rule-violation-banner.severity-low {
+  background: linear-gradient(135deg, rgba(13, 110, 253, 0.06), rgba(13, 110, 253, 0.02));
+  border-color: rgba(13, 110, 253, 0.25);
+}
+
+.violation-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.severity-critical .violation-banner-header { color: #c92a3e; }
+.severity-high .violation-banner-header { color: #d97706; }
+.severity-medium .violation-banner-header { color: #b45309; }
+.severity-low .violation-banner-header { color: #1d4ed8; }
+
+.violation-banner-header .block-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  color: #fff;
+}
+
+.severity-critical .block-icon { background: #dc3545; }
+.severity-high .block-icon { background: #fd7e14; }
+.severity-medium .block-icon { background: #ffc107; color: #744210; }
+.severity-low .block-icon { background: #0d6efd; }
+
+.violation-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.violation-item {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  border-left: 3px solid;
+}
+
+.severity-critical .violation-item { border-left-color: #dc3545; }
+.severity-high .violation-item { border-left-color: #fd7e14; }
+.severity-medium .violation-item { border-left-color: #ffc107; }
+.severity-low .violation-item { border-left-color: #0d6efd; }
+
+.violation-rule-label {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.violation-context {
+  color: var(--muted);
+  flex: 1;
+}
+
+.violation-severity-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.severity-tag-critical { background: #dc3545; color: #fff; }
+.severity-tag-high { background: #fd7e14; color: #fff; }
+.severity-tag-medium { background: #ffc107; color: #744210; }
+.severity-tag-low { background: #0d6efd; color: #fff; }
+
+.rule-suggestion-panel {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  font-size: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.suggestion-icon {
+  color: #0d6efd;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.suggestion-content {
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.suggestion-content strong {
+  color: #1d4ed8;
+}
+
+.form-rule-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.form-rule-hint.blocking {
+  background: rgba(220, 53, 69, 0.06);
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  color: #c92a3e;
+}
+
+.form-rule-hint.warning {
+  background: rgba(255, 193, 7, 0.06);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  color: #b45309;
+}
+
+.form-rule-hint .hint-icon {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* 风险预警中心强化 */
+.risk-alert-card {
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  background: #fff;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  transition: all 0.15s ease;
+}
+
+.risk-alert-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.alert-type-indicator {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.alert-type-expired { background: rgba(220, 53, 69, 0.1); color: #dc3545; }
+.alert-type-supplier { background: rgba(253, 126, 20, 0.1); color: #fd7e14; }
+.alert-type-cabinet { background: rgba(109, 40, 217, 0.1); color: #6d28d9; }
+.alert-type-safety { background: rgba(220, 53, 69, 0.08); color: #dc3545; }
+.alert-type-conflict { background: rgba(234, 88, 12, 0.1); color: #ea580c; }
+.alert-type-info { background: rgba(13, 110, 253, 0.1); color: #0d6efd; }
+
+.risk-alert-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.risk-alert-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.risk-alert-meta {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.risk-alert-meta .meta-label {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.risk-alert-meta .meta-value {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.risk-alert-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.risk-alert-severity {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+.risk-severity-critical { background: #dc3545; color: #fff; }
+.risk-severity-high { background: #fd7e14; color: #fff; }
+.risk-severity-medium { background: #ffc107; color: #744210; }
+.risk-severity-low { background: #0d6efd; color: #fff; }
+
+.alert-resolve-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  background: #fff;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.alert-resolve-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: rgba(13, 110, 253, 0.05);
+}
+
+.alert-resolved {
+  opacity: 0.55;
+}
+
+.alert-resolved .risk-alert-title::after {
+  content: '已处理';
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--success);
+  color: #fff;
+  font-size: 9px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* 调度看板风险标识 */
+.schedule-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.schedule-risk-badge.has-blocking {
+  background: rgba(220, 53, 69, 0.12);
+  color: #c92a3e;
+  border: 1px solid rgba(220, 53, 69, 0.25);
+}
+
+.schedule-risk-badge.has-warning {
+  background: rgba(255, 193, 7, 0.15);
+  color: #b45309;
+  border: 1px solid rgba(255, 193, 7, 0.35);
+}
+
+.schedule-card.rule-blocked {
+  border-color: rgba(220, 53, 69, 0.4) !important;
+  background: linear-gradient(180deg, rgba(220, 53, 69, 0.04), transparent 60%) !important;
+}
+
+.schedule-card.rule-warned {
+  border-color: rgba(255, 193, 7, 0.5) !important;
+  background: linear-gradient(180deg, rgba(255, 193, 7, 0.04), transparent 60%) !important;
+}
+
+.rule-violations-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.rule-violations-section .section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+
+.rule-violation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin: 2px 4px 2px 0;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--line);
+}
+
+.rule-violation-chip.violation-critical {
+  background: rgba(220, 53, 69, 0.06);
+  border-color: rgba(220, 53, 69, 0.2);
+  color: #c92a3e;
+}
+
+.rule-violation-chip.violation-high {
+  background: rgba(253, 126, 20, 0.06);
+  border-color: rgba(253, 126, 20, 0.2);
+  color: #d97706;
+}
+
+.rule-violation-chip.violation-medium {
+  background: rgba(255, 193, 7, 0.06);
+  border-color: rgba(255, 193, 7, 0.3);
+  color: #b45309;
+}
+
+.rule-violation-chip.violation-low {
+  background: rgba(13, 110, 253, 0.06);
+  border-color: rgba(13, 110, 253, 0.2);
+  color: #1d4ed8;
+}
+
+.rules-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 768px) {
+  .rules-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.rule-stat-card {
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rule-stat-card .stat-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.rule-stat-card .stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.rule-stat-card.critical .stat-value { color: #dc3545; }
+.rule-stat-card.high .stat-value { color: #fd7e14; }
+.rule-stat-card.medium .stat-value { color: #d97706; }
+.rule-stat-card.low .stat-value { color: #0d6efd; }
+
+.rule-stat-card .stat-trend {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.violation-detail-modal .modal-body {
+  padding: 20px 24px;
+}
+
+.violation-detail-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 8px 14px;
+  padding: 8px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.violation-detail-row:last-child {
+  border-bottom: none;
+}
+
+.violation-detail-row .detail-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.violation-detail-row .detail-value {
+  color: var(--text);
+}
+
