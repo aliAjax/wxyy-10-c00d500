@@ -658,6 +658,43 @@
       "witness": "",
       "disposedAt": "2026-06-20T09:11:26.442Z",
       "disposedBy": "测试"
+    },
+    {
+      "id": "wastes-1782008238617-b8c57",
+      "code": "BF20260621001",
+      "title": "【已过期33天】冷焰火喷泉P20 / PY-P20-2508报废申请",
+      "batchId": "batch-alert-2",
+      "maxQuantity": 10,
+      "unit": "支",
+      "suggestTitle": "【已过期33天】冷焰火喷泉P20 / PY-P20-2508报废申请",
+      "quantity": 10,
+      "reason": "已过期33天，建议报废。批次：PY-P20-2508，品名：冷焰火喷泉P20，规格：10支，有效期：2026-05-20。",
+      "applicant": "张伟",
+      "disposalMethod": "专业机构回收",
+      "status": "待审批",
+      "actualQuantity": 0,
+      "createdAt": "2026-06-21T02:17:18.617Z",
+      "updatedAt": "2026-06-21T02:17:18.617Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T02:17:18.617Z",
+          "action": "创建申请",
+          "note": "批次：冷焰火喷泉P20 / PY-P20-2508，申请报废：10支，原因：已过期33天，建议报废。批次：PY-P20-2508，品名：冷焰火喷泉P20，规格：10支，有效期：2026-05-20。",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
     }
   ],
   "schedules": [
@@ -717,6 +754,94 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1782008238617-667ec",
+      "actionType": "创建",
+      "targetCollection": "wastes",
+      "targetId": "wastes-1782008238617-b8c57",
+      "targetLabel": "BF20260621001 / 【已过期33天】冷焰火喷泉P20 / PY-P20-2508报废申请",
+      "changes": {
+        "id": {
+          "after": "wastes-1782008238617-b8c57"
+        },
+        "code": {
+          "after": "BF20260621001"
+        },
+        "title": {
+          "after": "【已过期33天】冷焰火喷泉P20 / PY-P20-2508报废申请"
+        },
+        "batchId": {
+          "after": "batch-alert-2"
+        },
+        "maxQuantity": {
+          "after": 10
+        },
+        "unit": {
+          "after": "支"
+        },
+        "suggestTitle": {
+          "after": "【已过期33天】冷焰火喷泉P20 / PY-P20-2508报废申请"
+        },
+        "quantity": {
+          "after": 10
+        },
+        "reason": {
+          "after": "已过期33天，建议报废。批次：PY-P20-2508，品名：冷焰火喷泉P20，规格：10支，有效期：2026-05-20。"
+        },
+        "applicant": {
+          "after": "张伟"
+        },
+        "disposalMethod": {
+          "after": "专业机构回收"
+        },
+        "status": {
+          "after": "待审批"
+        },
+        "actualQuantity": {
+          "after": 0
+        },
+        "createdAt": {
+          "after": "2026-06-21T02:17:18.617Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T02:17:18.617Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T02:17:18.617Z",
+              "action": "创建申请",
+              "note": "批次：冷焰火喷泉P20 / PY-P20-2508，申请报废：10支，原因：已过期33天，建议报废。批次：PY-P20-2508，品名：冷焰火喷泉P20，规格：10支，有效期：2026-05-20。",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T02:17:18.617Z"
+    },
     {
       "id": "auditLogs-1781960094304-2d367",
       "actionType": "创建",

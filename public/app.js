@@ -22,7 +22,8 @@ const state = {
   expandedSchedule: null,
   scheduleEdits: {},
   scheduleReturnInputs: {},
-  scheduleFormRows: [{}]
+  scheduleFormRows: [{}],
+  wastePrefill: null
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -153,36 +154,59 @@ function cabinetOptionList(collection, labelFields, excludeBatchId = null) {
   }).join('');
 }
 
-function formField(field) {
+function formField(field, prefill = null) {
   const required = field.required ? 'required' : '';
-  const value = field.default ? `value="${escapeHtml(field.default)}"` : '';
+  const prefillValue = prefill && prefill[field.name] !== undefined ? prefill[field.name] : '';
+  const defaultOrPrefill = prefillValue !== '' ? prefillValue : (field.default || '');
+  const value = defaultOrPrefill ? `value="${escapeHtml(defaultOrPrefill)}"` : '';
+  const readonly = field.type === 'display' ? 'readonly' : '';
+
   if (field.type === 'display') {
     const dataAttr = field.autoFillSource ? `data-auto-fill-target="${field.name}"` : '';
-    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="text" name="${field.name}" ${dataAttr} ${required} readonly></label>`;
+    const displayValue = prefillValue !== '' ? escapeHtml(prefillValue) : '';
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="text" name="${field.name}" value="${displayValue}" ${dataAttr} ${required} readonly></label>`;
   }
   if (field.type === 'textarea') {
-    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<textarea name="${field.name}" ${required}></textarea></label>`;
+    const textAreaValue = prefillValue !== '' ? escapeHtml(prefillValue) : '';
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<textarea name="${field.name}" ${required}>${textAreaValue}</textarea></label>`;
   }
   if (field.type === 'select') {
-    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required}>${field.options.map((option) => `<option>${escapeHtml(option)}</option>`).join('')}</select></label>`;
+    const options = field.options.map((option) => {
+      const selected = String(prefillValue) === option ? 'selected' : '';
+      return `<option ${selected}>${escapeHtml(option)}</option>`;
+    }).join('');
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required}>${options}</select></label>`;
   }
   if (field.type === 'relation') {
     const items = state.db[field.collection] || [];
     const autoFillAttr = field.autoFill ? `data-auto-fill='${JSON.stringify(field.autoFill)}' data-collection="${field.collection}"` : '';
+    const selectedValue = prefillValue || '';
+    const optionItems = items.map((item) => {
+      const label = field.labelFields.map((f) => item[f]).filter(Boolean).join(' / ');
+      const selected = String(item.id) === String(selectedValue) ? 'selected' : '';
+      return `<option value="${item.id}" ${selected}>${escapeHtml(label)}</option>`;
+    }).join('');
     if (field.collection === 'cabinets' && field.name === 'cabinetId') {
       return `
         <label class="${field.wide ? 'wide' : ''}">${field.label}
           <select name="${field.name}" ${required} ${autoFillAttr} data-cabinet-select>
             <option value="">请选择</option>
-            ${cabinetOptionList('cabinets', field.labelFields)}
+            ${cabinetOptionList('cabinets', field.labelFields, selectedValue)}
           </select>
         </label>
         <div class="cabinet-capacity-info" data-cabinet-capacity-info></div>
       `;
     }
-    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required} ${autoFillAttr}><option value="">请选择</option>${optionList(items, field.labelFields)}</select></label>`;
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<select name="${field.name}" ${required} ${autoFillAttr}><option value="">请选择</option>${optionItems}</select></label>`;
   }
-  return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${required}></label>`;
+  if (field.type === 'number') {
+    let maxAttr = '';
+    if (field.name === 'quantity' && prefill && prefill.maxQuantity !== undefined) {
+      maxAttr = `max="${prefill.maxQuantity}"`;
+    }
+    return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="number" name="${field.name}" ${value} ${maxAttr} min="0" ${required}></label>`;
+  }
+  return `<label class="${field.wide ? 'wide' : ''}">${field.label}<input type="${field.type || 'text'}" name="${field.name}" ${value} ${readonly} ${required}></label>`;
 }
 
 function pill(value, tone = '') {
@@ -1055,10 +1079,37 @@ function renderWasteList(view) {
 function renderWasteView(view) {
   const statusOptions = view.statusOptions || [];
   const canCreate = canCurrentUser('create', 'wastes');
+  const prefill = state.wastePrefill;
+  const alertToneClass = prefill?.alertType === 'expired' ? 'expired' : prefill?.alertType === 'expiring' ? 'expiring' : '';
+  const alertLabel = prefill?.alertType === 'expired' ? '已过期批次发起报废' : prefill?.alertType === 'expiring' ? '临期批次发起报废' : '';
+  const alertBanner = prefill ? `
+    <div class="waste-prefill-banner ${alertToneClass}">
+      <span class="waste-prefill-icon">${prefill.alertType === 'expired' ? '⚠️' : prefill.alertType === 'expiring' ? '⏰' : '📦'}</span>
+      <div class="waste-prefill-info">
+        <strong>${escapeHtml(alertLabel || '发起报废申请')}</strong>
+        <span class="meta">批次：${escapeHtml(prefill.batchName || '')} / ${escapeHtml(prefill.batchNo || '')}，库存：${prefill.quantity || 0}${escapeHtml(prefill.unit || '')}，有效期：${escapeHtml(prefill.expiresAt || '未设置')}</span>
+      </div>
+      <button type="button" class="ghost waste-prefill-clear" data-clear-waste-prefill>清除预填</button>
+    </div>
+  ` : '';
+  const prefillFormData = prefill ? {
+    code: prefill.suggestedCode || '',
+    title: prefill.suggestedTitle || '',
+    batchId: prefill.batchId || '',
+    maxQuantity: prefill.quantity || 0,
+    unit: prefill.unit || '',
+    suggestTitle: prefill.suggestedTitle || '',
+    quantity: prefill.quantity || 0,
+    maxQuantity_raw: prefill.quantity || 0,
+    reason: prefill.suggestedReason || '',
+    applicant: state.currentUser?.name || '',
+    ...prefill
+  } : null;
   const createForm = canCreate ? `
-    <form class="panel" data-waste-form data-create="${view.collection}" data-view="${view.id}">
+    <form class="panel" data-waste-form data-create="${view.collection}" data-view="${view.id}" ${prefill ? 'data-waste-prefill="true"' : ''}>
       <h2>${escapeHtml(view.formTitle)}</h2>
-      <div class="form-grid">${view.fields.map(formField).join('')}</div>
+      ${alertBanner}
+      <div class="form-grid">${view.fields.map((f) => formField(f, prefillFormData)).join('')}</div>
       <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
     </form>
   ` : `
@@ -2066,9 +2117,32 @@ document.addEventListener('click', async (e) => {
   const openWasteFromBatch = e.target.closest('[data-create-waste-from-batch]');
   if (openWasteFromBatch) {
     const batchId = openWasteFromBatch.dataset.createWasteFromBatch;
-    state.activeView = 'wastes';
-    state.activeModal = { collection: 'wastes', prefill: { batchId } };
+    try {
+      const prefill = await api(`/api/batches/${batchId}/waste-prefill`);
+      state.wastePrefill = prefill;
+      state.activeView = 'wastes';
+      state.activeTab = 'wastes';
+      render();
+      setTimeout(() => {
+        const form = document.querySelector('[data-waste-form]');
+        if (form) {
+          form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          form.classList.add('waste-form-highlight');
+          setTimeout(() => form.classList.remove('waste-form-highlight'), 2500);
+        }
+      }, 100);
+      toast('已一键带入报废申请信息，请确认后提交');
+    } catch (err) {
+      toast(err.message || '获取预填充信息失败');
+    }
+    return;
+  }
+
+  const clearWastePrefill = e.target.closest('[data-clear-waste-prefill]');
+  if (clearWastePrefill) {
+    state.wastePrefill = null;
     render();
+    toast('已清除预填充信息');
     return;
   }
 
@@ -2471,6 +2545,63 @@ document.addEventListener('change', (e) => {
         }
       }
     }
+    if (fieldCfg.collection === 'batches' && fieldName === 'batchId' && related) {
+      const now = new Date();
+      const expiringDays = state.config.alerts?.expiringDays || 30;
+      const expireDate = related.expiresAt ? new Date(related.expiresAt) : null;
+      let alertType = 'normal';
+      let reasonPrefix = '';
+      if (expireDate) {
+        if (expireDate < now) {
+          alertType = 'expired';
+          const daysExpired = Math.ceil((now - expireDate) / (1000 * 60 * 60 * 24));
+          reasonPrefix = `已过期${daysExpired}天`;
+        } else {
+          const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+          if (daysLeft <= expiringDays) {
+            alertType = 'expiring';
+            reasonPrefix = `临期（还有${daysLeft}天过期）`;
+          } else {
+            reasonPrefix = '库存批次';
+          }
+        }
+      } else {
+        reasonPrefix = '库存批次';
+      }
+      const batchTitle = [related.name, related.batchNo].filter(Boolean).join(' / ');
+      const suggestedTitle = `【${reasonPrefix}】${batchTitle}报废申请`;
+      const suggestedReason = `${reasonPrefix}，建议报废。批次：${related.batchNo}，品名：${related.name}，规格：${related.quantity || 0}${related.unit || ''}，有效期：${related.expiresAt || '未设置'}。`;
+      const titleInput = form.querySelector('input[name="title"]');
+      if (titleInput && !titleInput.value.trim()) {
+        titleInput.value = suggestedTitle;
+      }
+      const reasonInput = form.querySelector('textarea[name="reason"]');
+      if (reasonInput && !reasonInput.value.trim()) {
+        reasonInput.value = suggestedReason;
+      }
+      const suggestTitleDisplay = form.querySelector('input[name="suggestTitle"]');
+      if (suggestTitleDisplay) {
+        suggestTitleDisplay.value = suggestedTitle;
+      }
+      const qtyInput = form.querySelector('input[name="quantity"]');
+      if (qtyInput && related.quantity !== undefined) {
+        qtyInput.max = related.quantity;
+        if (!qtyInput.value) {
+          qtyInput.value = related.quantity;
+        }
+      }
+      const applicantInput = form.querySelector('input[name="applicant"]');
+      if (applicantInput && !applicantInput.value.trim() && state.currentUser?.name) {
+        applicantInput.value = state.currentUser.name;
+      }
+      const codeInput = form.querySelector('input[name="code"]');
+      if (codeInput && !codeInput.value.trim()) {
+        const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const existingCount = (state.db.wastes || []).filter(w => w.code && w.code.includes(todayStr)).length;
+        const seqNum = String(existingCount + 1).padStart(3, '0');
+        codeInput.value = `BF${todayStr}${seqNum}`;
+      }
+    }
     if (form) renderCabinetCapacityInfo(form);
     return;
   }
@@ -2497,14 +2628,34 @@ document.addEventListener('submit', async (e) => {
   if (wasteForm) {
     e.preventDefault();
     const data = collectFormData(wasteForm);
-    await api('/api/wastes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    state.activeModal = null;
-    await loadDb();
-    render();
+    const qtyInput = wasteForm.querySelector('input[name="quantity"]');
+    const maxQtyInput = wasteForm.querySelector('input[name="maxQuantity"]');
+    if (qtyInput && maxQtyInput) {
+      const qty = Number(qtyInput.value || 0);
+      const maxQty = Number(maxQtyInput.value || 0);
+      if (qty <= 0) {
+        toast('报废数量必须大于0');
+        return;
+      }
+      if (qty > maxQty) {
+        toast(`报废数量(${qty})超过当前库存(${maxQty})`);
+        return;
+      }
+    }
+    try {
+      await api('/api/wastes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      state.activeModal = null;
+      state.wastePrefill = null;
+      toast('报废申请已提交，等待审批');
+      await loadDb();
+      render();
+    } catch (err) {
+      toast(err.message || '提交失败');
+    }
     return;
   }
 

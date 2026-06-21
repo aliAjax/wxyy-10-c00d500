@@ -1535,6 +1535,71 @@ app.delete('/api/schedules/:id', requireUser, async (req, res) => {
   res.status(204).end();
 });
 
+app.get('/api/batches/:id/waste-prefill', requireUser, async (req, res) => {
+  const db = await readDb();
+  const batch = db.batches?.find((b) => b.id === req.params.id);
+  if (!batch) return res.status(404).json({ error: '批次不存在' });
+  if (batch.status === '已报废') return res.status(409).json({ error: '该批次已报废' });
+
+  const now = new Date();
+  const expiringDays = config.alerts?.expiringDays || 30;
+  const expireDate = batch.expiresAt ? new Date(batch.expiresAt) : null;
+  let alertType = 'normal';
+  let reasonPrefix = '';
+
+  if (expireDate) {
+    if (expireDate < now) {
+      alertType = 'expired';
+      const daysExpired = Math.ceil((now - expireDate) / (1000 * 60 * 60 * 24));
+      reasonPrefix = `已过期${daysExpired}天`;
+    } else {
+      const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+      if (daysLeft <= expiringDays) {
+        alertType = 'expiring';
+        reasonPrefix = `临期（还有${daysLeft}天过期）`;
+      } else {
+        reasonPrefix = '库存批次';
+      }
+    }
+  } else {
+    reasonPrefix = '库存批次';
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const existingCount = (db.wastes || []).filter((w) => w.code && w.code.includes(todayStr)).length;
+  const seqNum = String(existingCount + 1).padStart(3, '0');
+  const suggestedCode = `BF${todayStr}${seqNum}`;
+
+  const batchTitle = [batch.name, batch.batchNo].filter(Boolean).join(' / ');
+  const suggestedTitle = `【${reasonPrefix}】${batchTitle}报废申请`;
+  const suggestedReason = `${reasonPrefix}，建议报废。批次：${batch.batchNo}，品名：${batch.name}，规格：${batch.quantity || 0}${batch.unit || ''}，有效期：${batch.expiresAt || '未设置'}。`;
+
+  const supplier = db.suppliers?.find((s) => s.id === batch.supplierId);
+  const cabinet = db.cabinets?.find((c) => c.id === batch.cabinetId);
+
+  res.json({
+    batchId: batch.id,
+    batchName: batch.name,
+    batchNo: batch.batchNo,
+    category: batch.category || '',
+    safetyLevel: batch.safetyLevel || '',
+    quantity: Number(batch.quantity || 0),
+    unit: batch.unit || '',
+    expiresAt: batch.expiresAt || '',
+    status: batch.status || '',
+    supplierId: batch.supplierId || '',
+    supplierName: supplier?.name || '',
+    cabinetId: batch.cabinetId || '',
+    cabinetCode: cabinet?.code || '',
+    cabinetArea: cabinet?.area || '',
+    alertType,
+    suggestedCode,
+    suggestedTitle,
+    suggestedReason,
+    maxQuantity: Number(batch.quantity || 0)
+  });
+});
+
 function escapeCsvField(value) {
   if (value === null || value === undefined) return '';
   const str = String(value);

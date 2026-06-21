@@ -415,9 +415,10 @@ module.exports = {
       fields: [
         { label: '报废单号', name: 'code', required: true },
         { label: '报废标题', name: 'title', required: true, wide: true },
-        { label: '药剂批次', name: 'batchId', type: 'relation', collection: 'batches', labelFields: ['name', 'batchNo'], required: true, wide: true, autoFill: [{ from: 'quantity', to: 'maxQuantity' }, { from: 'unit', to: 'unit' }] },
+        { label: '药剂批次', name: 'batchId', type: 'relation', collection: 'batches', labelFields: ['name', 'batchNo'], required: true, wide: true, autoFill: [{ from: 'quantity', to: 'maxQuantity' }, { from: 'unit', to: 'unit' }, { from: 'name', to: 'suggestName' }, { from: 'batchNo', to: 'suggestBatchNo' }, { from: 'expiresAt', to: 'suggestExpiresAt' }] },
         { label: '当前库存', name: 'maxQuantity', type: 'display' },
         { label: '单位', name: 'unit', type: 'display' },
+        { label: '建议报废标题', name: 'suggestTitle', type: 'display', wide: true },
         { label: '申请报废数量', name: 'quantity', type: 'number', required: true },
         { label: '报废原因', name: 'reason', required: true, wide: true },
         { label: '申请人', name: 'applicant', required: true },
