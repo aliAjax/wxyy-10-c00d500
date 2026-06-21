@@ -334,6 +334,7 @@ module.exports = {
     {
       id: 'projects',
       label: '演出项目档案',
+      type: 'project',
       collection: 'projects',
       formTitle: '新增演出项目',
       listTitle: '项目列表',
@@ -405,6 +406,7 @@ module.exports = {
       defaults: { status: '待审批', actualQuantity: 0 },
       relation: { collection: 'batches', localKey: 'batchId', labelFields: ['name', 'batchNo'] },
       detailFields: [
+        { label: '演出项目', name: 'projectId', type: 'relation', collection: 'projects', labelFields: ['name', 'venue'] },
         { label: '申请数量', name: 'quantity' },
         { label: '实际处置', name: 'actualQuantity' },
         { label: '处置方式', name: 'disposalMethod' },
@@ -416,6 +418,7 @@ module.exports = {
         { label: '报废单号', name: 'code', required: true },
         { label: '报废标题', name: 'title', required: true, wide: true },
         { label: '药剂批次', name: 'batchId', type: 'relation', collection: 'batches', labelFields: ['name', 'batchNo'], required: true, wide: true, autoFill: [{ from: 'quantity', to: 'maxQuantity' }, { from: 'unit', to: 'unit' }, { from: 'name', to: 'suggestName' }, { from: 'batchNo', to: 'suggestBatchNo' }, { from: 'expiresAt', to: 'suggestExpiresAt' }] },
+        { label: '演出项目', name: 'projectId', type: 'relation', collection: 'projects', labelFields: ['name', 'venue'] },
         { label: '当前库存', name: 'maxQuantity', type: 'display' },
         { label: '单位', name: 'unit', type: 'display' },
         { label: '建议报废标题', name: 'suggestTitle', type: 'display', wide: true },

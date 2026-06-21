@@ -171,6 +171,12 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
     const reservedQty = Number(batch.reservedQuantity || 0);
     const availableQty = Math.max(0, stockQty - reservedQty);
     const stocktakeId = req.body.stocktakeId || null;
+    const projectId = req.body.projectId || null;
+
+    if (projectId) {
+      const project = db.projects?.find((p) => p.id === projectId);
+      if (!project) return res.status(409).json({ error: '关联项目不存在' });
+    }
 
     if (wasteQty <= 0) return res.status(409).json({ error: '报废数量必须大于0' });
 
@@ -213,12 +219,19 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
     }
 
     const sourceLabel = stocktakeId ? '（盘点盘亏发起）' : '';
+    const projectLabel = projectId
+      ? (() => {
+          const p = db.projects?.find((x) => x.id === projectId);
+          return p ? `，项目：${p.name}` : '';
+        })()
+      : '';
     item = {
       id: `${collection}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
       ...req.body,
       status: '待审批',
       actualQuantity: 0,
       stocktakeId: stocktakeId,
+      projectId: projectId,
       isStocktakeInitiated: isStocktakeInitiated,
       stocktakeDeficitQty: stocktakeDeficitQty,
       stockAdjusted: isStocktakeInitiated,
@@ -226,7 +239,7 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       createdAt: now,
       updatedAt: now,
       createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
-      history: [stamp('创建申请' + sourceLabel, `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}${isStocktakeInitiated ? `，盘亏数量：${stocktakeDeficitQty}${batch.unit || ''}（库存已同步扣减）` : ''}`, operator)]
+      history: [stamp('创建申请' + sourceLabel, `批次：${batch.name} / ${batch.batchNo}，申请报废：${req.body.quantity}${batch.unit || ''}，原因：${req.body.reason || '未填写'}${isStocktakeInitiated ? `，盘亏数量：${stocktakeDeficitQty}${batch.unit || ''}（库存已同步扣减）` : ''}${projectLabel}`, operator)]
     };
 
     if (stocktakeId) {
@@ -525,6 +538,132 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
   res.json(result.item);
 });
 
+function getProjectBatchIds(db, projectId) {
+  const batchIds = new Set();
+  (db.requests || []).forEach((r) => {
+    if (r.projectId === projectId && r.batchId) batchIds.add(r.batchId);
+  });
+  (db.schedules || []).forEach((s) => {
+    if (s.projectId === projectId) {
+      (s.items || []).forEach((it) => {
+        if (it.batchId) batchIds.add(it.batchId);
+      });
+    }
+  });
+  return [...batchIds];
+}
+
+function getProjectClosureSummary(db, projectId) {
+  const project = db.projects?.find((p) => p.id === projectId);
+  if (!project) return null;
+
+  const requests = (db.requests || []).filter((r) => r.projectId === projectId);
+  const schedules = (db.schedules || []).filter((s) => s.projectId === projectId);
+  const wastes = (db.wastes || []).filter((w) => w.projectId === projectId);
+  const projectBatchIds = getProjectBatchIds(db, projectId);
+  const riskBatches = [];
+  const now = new Date();
+  const expiringDays = config.alerts?.expiringDays || 30;
+  const lowStockThreshold = config.alerts?.lowStockThreshold || 10;
+  const expiringCutoff = new Date(now.getTime() + expiringDays * 24 * 60 * 60 * 1000);
+
+  (db.batches || []).forEach((batch) => {
+    if (!projectBatchIds.includes(batch.id)) return;
+    if (batch.status === '已报废') return;
+    let hasRisk = false;
+    let riskTypes = [];
+    const expireDate = batch.expiresAt ? new Date(batch.expiresAt) : null;
+    if (expireDate) {
+      if (expireDate < now) {
+        hasRisk = true;
+        riskTypes.push('已过期');
+      } else if (expireDate <= expiringCutoff) {
+        hasRisk = true;
+        const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+        riskTypes.push(`临期(${daysLeft}天)`);
+      }
+    }
+    const qty = Number(batch.quantity || 0);
+    if (qty < lowStockThreshold) {
+      hasRisk = true;
+      riskTypes.push(`低库存(${qty})`);
+    }
+    if (batch.status === '锁定') {
+      hasRisk = true;
+      riskTypes.push('锁定');
+    }
+    if (hasRisk) {
+      riskBatches.push({
+        ...batch,
+        riskTypes
+      });
+    }
+  });
+
+  const openRequestStatuses = ['待审批', '已审批', '已出库'];
+  const openScheduleStatuses = ['调度待审批', '调度已审批', '调度已出库'];
+  const openWasteStatuses = ['待审批', '待处置'];
+
+  const openRequests = requests.filter((r) => openRequestStatuses.includes(r.status));
+  const openSchedules = schedules.filter((s) => openScheduleStatuses.includes(s.status));
+  const openWastes = wastes.filter((w) => openWasteStatuses.includes(w.status));
+
+  const unclosedItems = [];
+  openRequests.forEach((r) => {
+    unclosedItems.push({
+      type: 'request',
+      id: r.id,
+      label: r.showName || r.id,
+      status: r.status,
+      category: '领用申请'
+    });
+  });
+  openSchedules.forEach((s) => {
+    unclosedItems.push({
+      type: 'schedule',
+      id: s.id,
+      label: s.code || s.id,
+      status: s.status,
+      category: '用药调度'
+    });
+  });
+  openWastes.forEach((w) => {
+    unclosedItems.push({
+      type: 'waste',
+      id: w.id,
+      label: w.code || w.title || w.id,
+      status: w.status,
+      category: '报废单'
+    });
+  });
+
+  return {
+    projectId,
+    projectName: project.name,
+    total: {
+      requests: requests.length,
+      schedules: schedules.length,
+      wastes: wastes.length,
+      riskBatches: riskBatches.length
+    },
+    unclosed: {
+      requests: openRequests.length,
+      schedules: openSchedules.length,
+      wastes: openWastes.length,
+      riskBatches: riskBatches.length,
+      total: unclosedItems.length
+    },
+    details: {
+      requests,
+      schedules,
+      wastes,
+      riskBatches
+    },
+    unclosedItems,
+    hasUnclosed: unclosedItems.length > 0 || riskBatches.length > 0
+  };
+}
+
 function preActionCheck(db, action, item) {
   const openStatuses = config.alerts?.openRequestStatuses || ['待审批', '已审批', '已出库'];
   if (action.collection === 'batches') {
@@ -546,6 +685,27 @@ function preActionCheck(db, action, item) {
       if (reqQty > available) {
         const opName = action.id === 'request-approve' ? '审批' : '出库';
         return { error: `批次「${batch.name}/${batch.batchNo}」可用${available}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${reqQty}${batch.unit || ''}，无法${opName}，请先关闭相关调度单` };
+      }
+    }
+  }
+  if (action.id === 'project-complete' && action.collection === 'projects') {
+    const summary = getProjectClosureSummary(db, item.id);
+    if (summary) {
+      const blockers = [];
+      if (summary.unclosed.requests > 0) {
+        blockers.push(`${summary.unclosed.requests}个未闭环领用申请`);
+      }
+      if (summary.unclosed.schedules > 0) {
+        blockers.push(`${summary.unclosed.schedules}个未闭环用药调度`);
+      }
+      if (summary.unclosed.wastes > 0) {
+        blockers.push(`${summary.unclosed.wastes}个未完成报废单`);
+      }
+      if (blockers.length > 0) {
+        return {
+          error: `项目存在未闭环项，无法完成：${blockers.join('、')}`,
+          closureSummary: summary
+        };
       }
     }
   }
@@ -2528,6 +2688,30 @@ app.get('/api/audit-logs/export', requireUser, async (req, res) => {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(bom + csvContent);
+});
+
+app.get('/api/projects/:id/closure-summary', requireUser, async (req, res) => {
+  const db = await readDb();
+  const { id } = req.params;
+  const summary = getProjectClosureSummary(db, id);
+  if (!summary) return res.status(404).json({ error: '项目不存在' });
+  res.json(summary);
+});
+
+app.get('/api/projects/closure-summary', requireUser, async (req, res) => {
+  const db = await readDb();
+  const projects = db.projects || [];
+  const summaries = projects.map((p) => {
+    const summary = getProjectClosureSummary(db, p.id);
+    return {
+      projectId: p.id,
+      projectName: p.name,
+      projectStatus: p.status,
+      unclosed: summary ? summary.unclosed : { total: 0, requests: 0, schedules: 0, wastes: 0, riskBatches: 0 },
+      hasUnclosed: summary ? summary.hasUnclosed : false
+    };
+  });
+  res.json(summaries);
 });
 
 app.listen(PORT, () => {

@@ -23,7 +23,9 @@ const state = {
   scheduleEdits: {},
   scheduleReturnInputs: {},
   scheduleFormRows: [{}],
-  wastePrefill: null
+  wastePrefill: null,
+  expandedProject: null,
+  projectClosureSummaries: {}
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -2004,6 +2006,358 @@ function renderScheduleView(view) {
   </section>`;
 }
 
+function computeProjectClosureLocal(projectId) {
+  const project = state.db.projects?.find((p) => p.id === projectId);
+  if (!project) return null;
+
+  const requests = (state.db.requests || []).filter((r) => r.projectId === projectId);
+  const schedules = (state.db.schedules || []).filter((s) => s.projectId === projectId);
+  const wastes = (state.db.wastes || []).filter((w) => w.projectId === projectId);
+
+  const batchIds = new Set();
+  requests.forEach((r) => { if (r.batchId) batchIds.add(r.batchId); });
+  schedules.forEach((s) => {
+    (s.items || []).forEach((it) => {
+      if (it.batchId) batchIds.add(it.batchId);
+    });
+  });
+
+  const riskBatches = [];
+  const now = new Date();
+  const expiringDays = state.config.alerts?.expiringDays || 30;
+  const lowStockThreshold = state.config.alerts?.lowStockThreshold || 10;
+  const expiringCutoff = new Date(now.getTime() + expiringDays * 24 * 60 * 60 * 1000);
+
+  (state.db.batches || []).forEach((batch) => {
+    if (!batchIds.has(batch.id)) return;
+    if (batch.status === '已报废') return;
+    let hasRisk = false;
+    let riskTypes = [];
+    const expireDate = batch.expiresAt ? new Date(batch.expiresAt) : null;
+    if (expireDate) {
+      if (expireDate < now) {
+        hasRisk = true;
+        riskTypes.push('已过期');
+      } else if (expireDate <= expiringCutoff) {
+        hasRisk = true;
+        const daysLeft = Math.ceil((expireDate - now) / (1000 * 60 * 60 * 24));
+        riskTypes.push(`临期(${daysLeft}天)`);
+      }
+    }
+    const qty = Number(batch.quantity || 0);
+    if (qty < lowStockThreshold) {
+      hasRisk = true;
+      riskTypes.push(`低库存(${qty})`);
+    }
+    if (batch.status === '锁定') {
+      hasRisk = true;
+      riskTypes.push('锁定');
+    }
+    if (hasRisk) {
+      riskBatches.push({ ...batch, riskTypes });
+    }
+  });
+
+  const openRequestStatuses = ['待审批', '已审批', '已出库'];
+  const openScheduleStatuses = ['调度待审批', '调度已审批', '调度已出库'];
+  const openWasteStatuses = ['待审批', '待处置'];
+
+  const openRequests = requests.filter((r) => openRequestStatuses.includes(r.status));
+  const openSchedules = schedules.filter((s) => openScheduleStatuses.includes(s.status));
+  const openWastes = wastes.filter((w) => openWasteStatuses.includes(w.status));
+
+  const unclosedItems = [];
+  openRequests.forEach((r) => {
+    unclosedItems.push({
+      type: 'request',
+      id: r.id,
+      label: r.showName || r.id,
+      status: r.status,
+      category: '领用申请'
+    });
+  });
+  openSchedules.forEach((s) => {
+    unclosedItems.push({
+      type: 'schedule',
+      id: s.id,
+      label: s.code || s.id,
+      status: s.status,
+      category: '用药调度'
+    });
+  });
+  openWastes.forEach((w) => {
+    unclosedItems.push({
+      type: 'waste',
+      id: w.id,
+      label: w.code || w.title || w.id,
+      status: w.status,
+      category: '报废单'
+    });
+  });
+
+  return {
+    projectId,
+    projectName: project.name,
+    total: {
+      requests: requests.length,
+      schedules: schedules.length,
+      wastes: wastes.length,
+      riskBatches: riskBatches.length
+    },
+    unclosed: {
+      requests: openRequests.length,
+      schedules: openSchedules.length,
+      wastes: openWastes.length,
+      riskBatches: riskBatches.length,
+      total: unclosedItems.length
+    },
+    details: {
+      requests,
+      schedules,
+      wastes,
+      riskBatches
+    },
+    unclosedItems,
+    hasUnclosed: unclosedItems.length > 0 || riskBatches.length > 0
+  };
+}
+
+function renderProjectCard(project, view) {
+  const isExpanded = state.expandedProject === project.id;
+  const title = view.titleFields.map((f) => project[f]).filter(Boolean).join(' / ') || project.id;
+  const summary = (view.summaryFields || []).map((f) => project[f]).filter(Boolean).join(' · ');
+  const statusValue = project[view.statusField];
+  const closureSummary = computeProjectClosureLocal(project.id);
+
+  const details = (view.detailFields || []).map((field) => {
+    let value;
+    if (field.type === 'computed') {
+      value = computedFieldValue(field, project);
+    } else if (field.type === 'relation') {
+      value = relationLabel(field, project[field.name]);
+    } else {
+      value = project[field.name];
+    }
+    const displayValue = value === null || value === undefined || value === '' ? '-' : value;
+    return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
+  }).join('');
+
+  let actions = state.config.actions
+    .filter((action) => action.collection === 'projects');
+  actions = filterActionsByPermission(actions);
+  const actionsHtml = actions
+    .map((action) => `<button class="${action.danger ? 'danger' : 'ghost'}" data-action="${action.id}" data-id="${project.id}" data-project-action="${action.id}">${escapeHtml(action.label)}</button>`)
+    .join('');
+
+  let closureBadge = '';
+  if (closureSummary && closureSummary.hasUnclosed) {
+    const unclosedTotal = closureSummary.unclosed.total || 0;
+    const riskCount = closureSummary.unclosed.riskBatches || 0;
+    const badgeText = unclosedTotal > 0
+      ? `${unclosedTotal}个未闭环项`
+      : `${riskCount}个风险批次`;
+    closureBadge = `<span class="pill warn" style="margin-top:6px;">⚠ ${badgeText}</span>`;
+  } else if (closureSummary) {
+    closureBadge = `<span class="pill ok" style="margin-top:6px;">✓ 全部闭环</span>`;
+  }
+
+  let expandContent = '';
+  if (isExpanded && closureSummary) {
+    const total = closureSummary.total;
+    const unclosed = closureSummary.unclosed;
+
+    const requestListHtml = total.requests > 0
+      ? closureSummary.details.requests.map((r) => {
+          const batchLabel = relationLabel({ collection: 'batches', labelFields: ['name', 'batchNo'] }, r.batchId);
+          const isOpen = ['待审批', '已审批', '已出库'].includes(r.status);
+          return `<div class="closure-item ${isOpen ? 'unclosed' : 'closed'}">
+            <div class="closure-item-head">
+              <span class="closure-item-title">${escapeHtml(r.showName || r.id)}</span>
+              ${pill(r.status, toneFor(r.status))}
+            </div>
+            <div class="meta">批次：${escapeHtml(batchLabel)}　数量：${r.quantity}${escapeHtml(r.unit || '')}</div>
+            <div class="meta">操作：${escapeHtml(r.operator || '-')}　时段：${escapeHtml(r.useWindow || '-')}</div>
+          </div>`;
+        }).join('')
+      : '<div class="empty">暂无领用申请</div>';
+
+    const scheduleListHtml = total.schedules > 0
+      ? closureSummary.details.schedules.map((s) => {
+          const isOpen = ['调度待审批', '调度已审批', '调度已出库'].includes(s.status);
+          const itemsCount = (s.items || []).length;
+          const totalQty = (s.items || []).reduce((sum, it) => sum + Number(it.quantity || 0), 0);
+          return `<div class="closure-item ${isOpen ? 'unclosed' : 'closed'}">
+            <div class="closure-item-head">
+              <span class="closure-item-title">${escapeHtml(s.code || s.id)}</span>
+              ${pill(s.status, toneFor(s.status))}
+            </div>
+            <div class="meta">${itemsCount}条明细，共${totalQty}单位　操作：${escapeHtml(s.operator || '-')}</div>
+            <div class="meta">时段：${escapeHtml(s.useWindow || '-')}</div>
+          </div>`;
+        }).join('')
+      : '<div class="empty">暂无用药调度</div>';
+
+    const wasteListHtml = total.wastes > 0
+      ? closureSummary.details.wastes.map((w) => {
+          const batchLabel = relationLabel({ collection: 'batches', labelFields: ['name', 'batchNo'] }, w.batchId);
+          const isOpen = ['待审批', '待处置'].includes(w.status);
+          return `<div class="closure-item ${isOpen ? 'unclosed' : 'closed'}">
+            <div class="closure-item-head">
+              <span class="closure-item-title">${escapeHtml(w.code || w.title || w.id)}</span>
+              ${pill(w.status, toneFor(w.status))}
+            </div>
+            <div class="meta">批次：${escapeHtml(batchLabel)}　数量：${w.quantity}${escapeHtml(w.unit || '')}</div>
+            <div class="meta">申请人：${escapeHtml(w.applicant || '-')}　原因：${escapeHtml(w.reason || '-')}</div>
+          </div>`;
+        }).join('')
+      : '<div class="empty">暂无报废单</div>';
+
+    const riskBatchListHtml = total.riskBatches > 0
+      ? closureSummary.details.riskBatches.map((b) => {
+          const riskPills = (b.riskTypes || []).map((r) => `<span class="pill warn" style="font-size:11px;">${escapeHtml(r)}</span>`).join(' ');
+          return `<div class="closure-item unclosed">
+            <div class="closure-item-head">
+              <span class="closure-item-title">${escapeHtml(b.name)} / ${escapeHtml(b.batchNo)}</span>
+              ${pill(b.status, toneFor(b.status))}
+            </div>
+            <div class="meta">库存：${b.quantity}${escapeHtml(b.unit || '')}　有效期：${fmtDate(b.expiresAt)}</div>
+            <div class="closure-risk-badges">${riskPills}</div>
+          </div>`;
+        }).join('')
+      : '<div class="empty">暂无风险批次</div>';
+
+    expandContent = `
+      <div class="project-closure-detail">
+        <div class="closure-stats">
+          <div class="closure-stat">
+            <span class="closure-stat-label">领用申请</span>
+            <strong>${total.requests}</strong>
+            <span class="closure-stat-sub ${unclosed.requests > 0 ? 'bad-text' : 'ok-text'}">${unclosed.requests > 0 ? unclosed.requests + '个未闭环' : '全部闭环'}</span>
+          </div>
+          <div class="closure-stat">
+            <span class="closure-stat-label">用药调度</span>
+            <strong>${total.schedules}</strong>
+            <span class="closure-stat-sub ${unclosed.schedules > 0 ? 'bad-text' : 'ok-text'}">${unclosed.schedules > 0 ? unclosed.schedules + '个未闭环' : '全部闭环'}</span>
+          </div>
+          <div class="closure-stat">
+            <span class="closure-stat-label">报废单</span>
+            <strong>${total.wastes}</strong>
+            <span class="closure-stat-sub ${unclosed.wastes > 0 ? 'bad-text' : 'ok-text'}">${unclosed.wastes > 0 ? unclosed.wastes + '个未完成' : '全部完成'}</span>
+          </div>
+          <div class="closure-stat">
+            <span class="closure-stat-label">风险批次</span>
+            <strong>${total.riskBatches}</strong>
+            <span class="closure-stat-sub ${unclosed.riskBatches > 0 ? 'warn-text' : 'ok-text'}">${unclosed.riskBatches > 0 ? unclosed.riskBatches + '个有风险' : '无风险'}</span>
+          </div>
+        </div>
+
+        <div class="closure-sections">
+          <div class="closure-section">
+            <div class="closure-section-header">
+              <h4>📋 领用申请</h4>
+              ${unclosed.requests > 0 ? `<span class="pill bad">${unclosed.requests}个未闭环</span>` : `<span class="pill ok">全部闭环</span>`}
+            </div>
+            <div class="closure-list">${requestListHtml}</div>
+          </div>
+
+          <div class="closure-section">
+            <div class="closure-section-header">
+              <h4>📅 用药调度</h4>
+              ${unclosed.schedules > 0 ? `<span class="pill bad">${unclosed.schedules}个未闭环</span>` : `<span class="pill ok">全部闭环</span>`}
+            </div>
+            <div class="closure-list">${scheduleListHtml}</div>
+          </div>
+
+          <div class="closure-section">
+            <div class="closure-section-header">
+              <h4>🗑️ 报废单</h4>
+              ${unclosed.wastes > 0 ? `<span class="pill warn">${unclosed.wastes}个待处置</span>` : `<span class="pill ok">全部完成</span>`}
+            </div>
+            <div class="closure-list">${wasteListHtml}</div>
+          </div>
+
+          <div class="closure-section">
+            <div class="closure-section-header">
+              <h4>⚠️ 风险批次</h4>
+              ${unclosed.riskBatches > 0 ? `<span class="pill warn">${unclosed.riskBatches}个风险项</span>` : `<span class="pill ok">无风险</span>`}
+            </div>
+            <div class="closure-list">${riskBatchListHtml}</div>
+          </div>
+        </div>
+
+        ${actionsHtml ? `<div class="actions">${actionsHtml}</div>` : ''}
+      </div>
+    `;
+  }
+
+  return `<article class="card project-card">
+    <div class="card-head" data-expand-project="${project.id}" style="cursor:pointer;">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <div class="meta">${summary ? escapeHtml(summary) : ''}</div>
+        ${closureBadge ? `<div style="margin-top:4px;">${closureBadge}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${statusValue ? pill(statusValue, toneFor(statusValue)) : ''}
+        <span class="meta">${isExpanded ? '▲ 收起' : '▼ 展开闭环视图'}</span>
+      </div>
+    </div>
+    ${details ? `<div class="detail">${details}</div>` : ''}
+    ${expandContent}
+    ${!isExpanded && actionsHtml ? `<div class="actions">${actionsHtml}</div>` : ''}
+    ${historyHtml(project)}
+  </article>`;
+}
+
+function renderProjectList(view) {
+  const query = state.filters[view.id]?.search?.trim() || '';
+  const status = state.filters[view.id]?.status || '';
+  let items = [...(state.db[view.collection] || [])];
+  if (query) {
+    items = items.filter((item) => view.searchFields.some((field) => {
+      const raw = String(item[field] || '');
+      return raw.includes(query);
+    }));
+  }
+  if (status) {
+    items = items.filter((item) => item[view.statusField] === status);
+  }
+  return items.length ? items.map((item) => renderProjectCard(item, view)).join('') : '<div class="empty">暂无演出项目</div>';
+}
+
+function renderProjectView(view) {
+  const statusOptions = view.statusOptions || [];
+  const canCreate = canCurrentUser('create', 'projects');
+  const createForm = canCreate ? `
+    <form class="panel" data-crud-form="${view.collection}" data-create="${view.collection}" data-view="${view.id}">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="form-grid">${view.fields.map(formField).join('')}</div>
+      <div class="actions"><button>${escapeHtml(view.submitLabel || '保存')}</button></div>
+    </form>
+  ` : `
+    <div class="panel no-permission-panel">
+      <h2>${escapeHtml(view.formTitle)}</h2>
+      <div class="no-permission-tip">⚠️ 当前用户无权限创建演出项目，请切换到有权限的角色。</div>
+    </div>
+  `;
+  return `<section class="view" id="${view.id}">
+    <div class="grid">
+      ${createForm}
+      <div class="panel">
+        <h2>${escapeHtml(view.listTitle)}</h2>
+        <div class="toolbar">
+          <input data-search="${view.id}" placeholder="${escapeHtml(view.searchPlaceholder || '搜索')}" value="${escapeHtml(state.filters[view.id]?.search || '')}">
+          <select data-status-filter="${view.id}">
+            <option value="">全部状态</option>
+            ${statusOptions.map((option) => `<option${state.filters[view.id]?.status === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="list" id="list-${view.id}">${renderProjectList(view)}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function collectScheduleReturnData(scheduleId) {
   const inputs = state.scheduleReturnInputs?.[scheduleId] || {};
   const schedule = state.db.schedules?.find(s => s.id === scheduleId);
@@ -2162,6 +2516,7 @@ function render() {
     if (view.type === 'batch-import') return renderBatchImportView(view);
     if (view.type === 'schedule-board') return renderScheduleBoardView(view);
     if (view.type === 'schedule') return renderScheduleView(view);
+    if (view.type === 'project') return renderProjectView(view);
     return renderCrudView(view);
   }).join('');
   setTab(state.activeTab || state.config.views[0].id);
@@ -2747,6 +3102,21 @@ document.addEventListener('click', async (e) => {
     if (actionBtn.dataset.confirm && !confirm(`确定执行「${actionBtn.textContent.trim()}」操作吗？`)) {
       return;
     }
+    if (actionId === 'project-complete') {
+      const closureSummary = computeProjectClosureLocal(id);
+      if (closureSummary && closureSummary.unclosed.total > 0) {
+        const unclosed = closureSummary.unclosed;
+        const msg = `项目存在 ${unclosed.total} 个未闭环项，无法完成：\n` +
+          (unclosed.requests > 0 ? `  - ${unclosed.requests} 个领用申请未闭环\n` : '') +
+          (unclosed.schedules > 0 ? `  - ${unclosed.schedules} 个用药调度未闭环\n` : '') +
+          (unclosed.wastes > 0 ? `  - ${unclosed.wastes} 个报废单未完成\n` : '');
+        alert(msg + '\n请先处理完所有未闭环项后再完成项目。');
+        return;
+      }
+      if (!confirm('确定要完成该项目吗？项目完成后将无法再进行用药或报废操作。')) {
+        return;
+      }
+    }
     try {
       await api(`/api/action/${actionId}/${id}`, { method: 'POST' });
       await loadDb();
@@ -2783,6 +3153,14 @@ document.addEventListener('click', async (e) => {
   if (expandSchedule) {
     const id = expandSchedule.dataset.expandSchedule;
     state.expandedSchedule = state.expandedSchedule === id ? null : id;
+    render();
+    return;
+  }
+
+  const expandProject = e.target.closest('[data-expand-project]');
+  if (expandProject) {
+    const id = expandProject.dataset.expandProject;
+    state.expandedProject = state.expandedProject === id ? null : id;
     render();
     return;
   }
