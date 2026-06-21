@@ -447,7 +447,7 @@ module.exports = {
     { id: 'batch-ok', label: '可用', collection: 'batches', patches: [{ field: 'status', value: '可用' }] },
     { id: 'batch-lock', label: '锁定', collection: 'batches', patches: [{ field: 'status', value: '锁定' }] },
     { id: 'batch-waste', label: '报废', collection: 'batches', danger: true, patches: [{ field: 'status', value: '已报废' }] },
-    { id: 'request-approve', label: '审批通过', collection: 'requests', patches: [{ field: 'status', value: '已审批' }] },
+    { id: 'request-approve', label: '审批通过', collection: 'requests', relation: { collection: 'batches', localKey: 'batchId' }, patches: [{ field: 'status', value: '已审批' }] },
     {
       id: 'request-issue',
       label: '出库',
@@ -460,8 +460,8 @@ module.exports = {
       patches: [{ field: 'status', value: '已出库' }],
       deltas: [{ target: 'related', field: 'quantity', amountPath: 'item.quantity', amount: -1 }]
     },
-    { id: 'request-return', label: '回库闭环', collection: 'requests', patches: [{ field: 'status', value: '已回库' }, { field: 'returned', valuePath: 'item.quantity' }] },
-    { id: 'request-reject', label: '驳回', collection: 'requests', danger: true, patches: [{ field: 'status', value: '已驳回' }] },
+    { id: 'request-return', label: '回库闭环', collection: 'requests', relation: { collection: 'batches', localKey: 'batchId' }, patches: [{ field: 'status', value: '已回库' }, { field: 'returned', valuePath: 'item.quantity' }] },
+    { id: 'request-reject', label: '驳回', collection: 'requests', relation: { collection: 'batches', localKey: 'batchId' }, danger: true, patches: [{ field: 'status', value: '已驳回' }] },
     { id: 'supplier-active', label: '合作中', collection: 'suppliers', patches: [{ field: 'status', value: '合作中' }] },
     { id: 'supplier-pause', label: '暂停', collection: 'suppliers', patches: [{ field: 'status', value: '已暂停' }] },
     { id: 'supplier-expired', label: '资质过期', collection: 'suppliers', danger: true, patches: [{ field: 'status', value: '资质过期' }] },

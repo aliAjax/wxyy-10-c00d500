@@ -375,7 +375,7 @@
           "note": "入库20发"
         }
       ],
-      "reservedQuantity": 0
+      "reservedQuantity": 6
     },
     {
       "id": "batches-1782020614900-dd0da",
@@ -2249,6 +2249,23 @@
   ],
   "stockTransactions": [
     {
+      "id": "stockTransactions-seed-request-alert-1-approve",
+      "batchId": "batch-alert-4",
+      "type": "approveReserve",
+      "typeLabel": "审批预占",
+      "quantity": 0,
+      "reservedDelta": 6,
+      "stockAfter": 20,
+      "reservedAfter": 6,
+      "relatedType": "requests",
+      "relatedId": "request-alert-1",
+      "relatedLabel": "城市夏夜嘉年华 / 中央广场主舞台",
+      "note": "(历史数据迁移) 领用申请审批通过，预占6发",
+      "operator": null,
+      "operatorLabel": "系统导入",
+      "createdAt": "2026-06-13T10:00:00.000Z"
+    },
+    {
       "id": "stockTransactions-1782031316373-78734",
       "batchId": "batches-1782022424555-9b0f5",
       "type": "import",
@@ -2694,14 +2711,14 @@
       "batchId": "batch-seed-1",
       "type": "issue",
       "typeLabel": "出库",
-      "quantity": 0,
+      "quantity": -4,
       "reservedDelta": 0,
       "stockAfter": 14,
       "reservedAfter": 0,
-      "relatedType": "batches",
-      "relatedId": "batch-seed-1",
-      "relatedLabel": "冷焰火粉A17 / PY-A17-2605",
-      "note": "(历史数据迁移) 出库：数量调整",
+      "relatedType": "requests",
+      "relatedId": "request-seed-1",
+      "relatedLabel": "海港音乐节开场 / 南岸露天剧场",
+      "note": "(历史数据迁移) 领用申请出库4罐，从初始入库18罐推导",
       "operator": null,
       "operatorLabel": "系统导入",
       "createdAt": "2026-06-20T10:18:28.118Z"
@@ -2711,9 +2728,9 @@
       "batchId": "batch-seed-1",
       "type": "stockIn",
       "typeLabel": "入库",
-      "quantity": 14,
+      "quantity": 18,
       "reservedDelta": 0,
-      "stockAfter": 14,
+      "stockAfter": 18,
       "reservedAfter": 0,
       "relatedType": "batches",
       "relatedId": "batch-seed-1",

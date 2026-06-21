@@ -285,6 +285,14 @@ function getStockTransactionsByRelated(db, relatedType, relatedId) {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+function parseLegacyQuantity(note, patterns) {
+  for (const pattern of patterns) {
+    const match = note.match(pattern);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
 function migrateLegacyStockTransactions(db) {
   if (!db.batches) return false;
   if (!db[STOCK_TRANSACTION_COLLECTION]) {
@@ -300,7 +308,13 @@ function migrateLegacyStockTransactions(db) {
     if (existingBatchIds.has(batch.id)) continue;
 
     const createdAt = batch.createdAt || batch.updatedAt;
-    const initialQty = Number(batch.quantity || 0);
+    const history = batch.history || [];
+    const createEntry = history.find(entry => entry.action === '创建');
+    const createdQty = createEntry
+      ? parseLegacyQuantity(createEntry.note || '', [/入库\s*(\d+)/, /创建.*?(\d+)/])
+      : null;
+    const currentQty = Number(batch.quantity || 0);
+    const initialQty = createdQty ?? currentQty;
 
     writeStockTransaction(db, {
       batchId: batch.id,
@@ -315,7 +329,6 @@ function migrateLegacyStockTransactions(db) {
       createdAt: createdAt
     });
 
-    const history = batch.history || [];
     for (let i = history.length - 1; i >= 0; i--) {
       const entry = history[i];
       const action = entry.action || '';
@@ -337,6 +350,10 @@ function migrateLegacyStockTransactions(db) {
         type = STOCK_TRANSACTION_TYPES.ISSUE;
         const match = note.match(/出库：-?(\d+)/);
         if (match) quantity = -Number(match[1]);
+        if (!match && createdQty !== null) {
+          const inferredIssuedQty = createdQty - currentQty;
+          if (inferredIssuedQty > 0) quantity = -inferredIssuedQty;
+        }
       } else if (action.includes('回库')) {
         type = STOCK_TRANSACTION_TYPES.RETURN;
         const match = note.match(/回库：\+?(\d+)/);
@@ -1014,8 +1031,11 @@ function preActionCheck(db, action, item) {
     if (batch) {
       const stockQty = Number(batch.quantity || 0);
       const reservedQty = Number(batch.reservedQuantity || 0);
-      const available = Math.max(0, stockQty - reservedQty);
       const reqQty = Number(item.quantity || 0);
+      const ownReservedQty = action.id === 'request-issue' && item.status === '已审批'
+        ? Math.min(reservedQty, reqQty)
+        : 0;
+      const available = Math.max(0, stockQty - reservedQty + ownReservedQty);
       if (reqQty > available) {
         const opName = action.id === 'request-approve' ? '审批' : '出库';
         return { error: `批次「${batch.name}/${batch.batchNo}」可用${available}${batch.unit || ''}（库存${stockQty}，调度预占${reservedQty}），本次申请${reqQty}${batch.unit || ''}，无法${opName}，请先关闭相关调度单` };
@@ -1110,17 +1130,18 @@ function runAction(db, action, item, operator) {
     if (batch) {
       const oldReserved = Number(batch.reservedQuantity || 0);
       if (oldReserved > 0) {
-        batch.reservedQuantity = Math.max(0, oldReserved - reqQty);
+        const releasedQty = Math.min(oldReserved, reqQty);
+        batch.reservedQuantity = Math.max(0, oldReserved - releasedQty);
         batch.updatedAt = now;
         writeStockTransaction(db, {
           batchId: batch.id,
           type: STOCK_TRANSACTION_TYPES.RELEASE_APPROVE_RESERVE,
           quantity: 0,
-          reservedDelta: -reqQty,
+          reservedDelta: -releasedQty,
           relatedType: 'requests',
           relatedId: item.id,
           relatedLabel: getTargetLabel(item, 'requests'),
-          note: `领用申请驳回，释放预占${reqQty}${batch.unit || ''}`,
+          note: `领用申请驳回，释放预占${releasedQty}${batch.unit || ''}`,
           operator,
           createdAt: now
         });
@@ -1133,8 +1154,9 @@ function runAction(db, action, item, operator) {
     const batch = related;
     if (batch) {
       const oldReserved = Number(batch.reservedQuantity || 0);
+      const releasedQty = Math.min(oldReserved, reqQty);
       if (oldReserved > 0) {
-        batch.reservedQuantity = Math.max(0, oldReserved - reqQty);
+        batch.reservedQuantity = Math.max(0, oldReserved - releasedQty);
       }
       batch.quantity = Number(batch.quantity || 0) + reqQty;
       batch.updatedAt = now;
@@ -1142,7 +1164,7 @@ function runAction(db, action, item, operator) {
         batchId: batch.id,
         type: STOCK_TRANSACTION_TYPES.RETURN,
         quantity: reqQty,
-        reservedDelta: -reqQty,
+        reservedDelta: -releasedQty,
         relatedType: 'requests',
         relatedId: item.id,
         relatedLabel: getTargetLabel(item, 'requests'),
@@ -1182,14 +1204,15 @@ function runAction(db, action, item, operator) {
       const batch = related;
       if (batch) {
         const oldReserved = Number(batch.reservedQuantity || 0);
+        const releasedQty = Math.min(oldReserved, reqQty);
         if (oldReserved > 0) {
-          batch.reservedQuantity = Math.max(0, oldReserved - reqQty);
+          batch.reservedQuantity = Math.max(0, oldReserved - releasedQty);
         }
         writeStockTransaction(db, {
           batchId: batch.id,
           type: STOCK_TRANSACTION_TYPES.ISSUE,
           quantity: amount,
-          reservedDelta: -reqQty,
+          reservedDelta: -releasedQty,
           relatedType: 'requests',
           relatedId: item.id,
           relatedLabel: getTargetLabel(item, 'requests'),
