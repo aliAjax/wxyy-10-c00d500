@@ -70,43 +70,93 @@ function migrateWastesData(db) {
 
     if (!Array.isArray(waste.disposalRecords)) {
       waste.disposalRecords = [];
-      if (waste.status === '已处置' && actualQty > 0) {
-        waste.disposalRecords.push({
-          id: `dr-${waste.id}-legacy`,
-          seq: 1,
-          actualQuantity: actualQty,
-          disposalMethod: waste.disposalMethod || '',
-          witness: waste.witness || '',
-          disposedAt: waste.disposedAt || waste.updatedAt || waste.createdAt,
-          disposedBy: waste.disposedBy || '',
-          disposedByInfo: waste.disposedByInfo || null,
-          deductFromStock: waste.isStocktakeInitiated ? Math.max(0, actualQty - Number(waste.stocktakeDeficitQty || 0)) : actualQty,
-          offsetByStocktake: waste.isStocktakeInitiated ? Math.min(actualQty, Number(waste.stocktakeDeficitQty || 0)) : 0,
-          note: waste.disposalNote || waste.note || '(历史数据迁移生成)'
-        });
+      needUpdate = true;
+    }
+    if (waste.status === '已处置' && waste.disposalRecords.length === 0 && actualQty > 0) {
+      waste.disposalRecords.push({
+        id: `dr-${waste.id}-legacy`,
+        seq: 1,
+        actualQuantity: actualQty,
+        disposalMethod: waste.disposalMethod || '',
+        witness: waste.witness || '',
+        disposedAt: waste.disposedAt || waste.updatedAt || waste.createdAt,
+        disposedBy: waste.disposedBy || '',
+        disposedByInfo: waste.disposedByInfo || null,
+        deductFromStock: waste.isStocktakeInitiated ? Math.max(0, actualQty - Number(waste.stocktakeDeficitQty || 0)) : actualQty,
+        offsetByStocktake: waste.isStocktakeInitiated ? Math.min(actualQty, Number(waste.stocktakeDeficitQty || 0)) : 0,
+        note: waste.disposalNote || waste.note || '(历史数据迁移生成)'
+      });
+      needUpdate = true;
+    }
+
+    const recordsSum = waste.disposalRecords.reduce((s, r) => s + Number(r.actualQuantity || 0), 0);
+    let computedDisposed;
+    if (waste.status === '已处置' && waste.disposalRecords.length === 0 && actualQty === 0) {
+      computedDisposed = qty;
+    } else if (waste.disposalRecords.length > 0) {
+      computedDisposed = recordsSum;
+    } else if (actualQty > 0) {
+      computedDisposed = actualQty;
+    } else if (waste.status === '已处置') {
+      computedDisposed = qty;
+    } else {
+      computedDisposed = 0;
+    }
+
+    if (waste.disposedQuantity === undefined || Number(waste.disposedQuantity) !== computedDisposed) {
+      waste.disposedQuantity = computedDisposed;
+      needUpdate = true;
+    }
+    if (waste.actualQuantity === undefined || Number(waste.actualQuantity) !== computedDisposed) {
+      waste.actualQuantity = computedDisposed;
+      needUpdate = true;
+    }
+
+    const expectedRemaining = Math.max(0, qty - Number(waste.disposedQuantity || 0));
+    if (waste.remainingQuantity === undefined || Number(waste.remainingQuantity) !== expectedRemaining) {
+      waste.remainingQuantity = expectedRemaining;
+      needUpdate = true;
+    }
+    const expectedCount = waste.disposalRecords.length;
+    if (waste.disposalCount === undefined || Number(waste.disposalCount) !== expectedCount) {
+      waste.disposalCount = expectedCount;
+      needUpdate = true;
+    }
+
+    if (waste.disposalRecords.length > 0) {
+      const last = waste.disposalRecords[waste.disposalRecords.length - 1];
+      if (last.disposalMethod !== undefined && last.disposalMethod !== '' && waste.disposalMethod !== last.disposalMethod) {
+        waste.disposalMethod = last.disposalMethod;
+        needUpdate = true;
       }
-      needUpdate = true;
-    }
-
-    if (waste.disposedQuantity === undefined) {
-      if (waste.status === '已处置') {
-        waste.disposedQuantity = qty;
-      } else if (waste.disposalRecords.length > 0) {
-        waste.disposedQuantity = waste.disposalRecords.reduce((s, r) => s + Number(r.actualQuantity || 0), 0);
-      } else {
-        waste.disposedQuantity = 0;
+      if (last.witness !== undefined && last.witness !== '' && waste.witness !== last.witness) {
+        waste.witness = last.witness;
+        needUpdate = true;
       }
-      needUpdate = true;
-    }
-
-    if (waste.remainingQuantity === undefined) {
-      waste.remainingQuantity = Math.max(0, qty - Number(waste.disposedQuantity || 0));
-      needUpdate = true;
-    }
-
-    if (waste.disposalCount === undefined) {
-      waste.disposalCount = waste.disposalRecords.length;
-      needUpdate = true;
+      if (last.disposedBy !== undefined && last.disposedBy !== '' && waste.disposedBy !== last.disposedBy) {
+        waste.disposedBy = last.disposedBy;
+        needUpdate = true;
+      }
+      if (last.disposedByInfo !== undefined && last.disposedByInfo !== null) {
+        const curStr = JSON.stringify(waste.disposedByInfo || null);
+        const lastStr = JSON.stringify(last.disposedByInfo);
+        if (curStr !== lastStr) {
+          waste.disposedByInfo = last.disposedByInfo;
+          needUpdate = true;
+        }
+      }
+      if (last.disposedAt !== undefined && last.disposedAt !== '' && waste.disposedAt !== last.disposedAt) {
+        waste.disposedAt = last.disposedAt;
+        needUpdate = true;
+      }
+      if (waste.status === '部分处置' && computedDisposed >= qty && qty > 0) {
+        waste.status = '已处置';
+        needUpdate = true;
+      }
+      if (waste.status === '已处置' && expectedRemaining > 0 && qty > 0) {
+        waste.status = '部分处置';
+        needUpdate = true;
+      }
     }
 
     if (needUpdate) changed = true;

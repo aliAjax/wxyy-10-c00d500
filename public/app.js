@@ -1190,9 +1190,20 @@ function renderWasteCard(waste, view) {
     } else if (waste.status === '待处置' || waste.status === '部分处置') {
       const maxDisposeQty = remainingQty > 0 ? remainingQty : waste.quantity;
       const defaultActualQty = state.wasteEdits[waste.id]?.actualQuantity ?? maxDisposeQty;
-      const disposalMethod = state.wasteEdits[waste.id]?.disposalMethod || waste.disposalMethod || '';
-      const witness = state.wasteEdits[waste.id]?.witness || waste.witness || '';
-      const disposalNote = state.wasteEdits[waste.id]?.disposalNote || waste.disposalNote || '';
+      const lastRecord = (waste.status === '部分处置' && Array.isArray(waste.disposalRecords) && waste.disposalRecords.length > 0)
+        ? waste.disposalRecords[waste.disposalRecords.length - 1]
+        : null;
+      const disposalMethod = state.wasteEdits[waste.id]?.disposalMethod
+        || lastRecord?.disposalMethod
+        || waste.disposalMethod
+        || '';
+      const witness = state.wasteEdits[waste.id]?.witness
+        || lastRecord?.witness
+        || waste.witness
+        || '';
+      const disposalNote = state.wasteEdits[waste.id]?.disposalNote
+        || waste.disposalNote
+        || '';
       const disabledAttr = canDispose ? '' : 'readonly disabled';
       const statusHint = waste.status === '部分处置' ? `<div class="partial-disposal-hint">📌 当前处于部分处置状态，已处置 ${disposedQty}/${qty}${escapeHtml(unit)}，剩余 ${remainingQty}${escapeHtml(unit)} 可继续处置</div>` : '';
       actionButtons = `
