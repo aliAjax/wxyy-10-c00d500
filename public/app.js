@@ -1114,9 +1114,15 @@ function renderWasteCard(waste, view) {
   const batchLabel = batch ? `${batch.name} / ${batch.batchNo}` : '未关联批次';
   const unit = batch?.unit || '';
 
+  const qty = Number(waste.quantity || 0);
+  const disposedQty = Number(waste.disposedQuantity ?? waste.actualQuantity ?? 0);
+  const remainingQty = Number(waste.remainingQuantity ?? (qty - disposedQty));
+  const disposalCount = Number(waste.disposalCount ?? (disposedQty > 0 ? 1 : 0));
+  const progressPct = qty > 0 ? Math.min(100, Math.round((disposedQty / qty) * 100)) : 0;
+
   const canApprove = waste.status === '待审批' && canCurrentUser('special', 'wastes-approve');
   const canReject = waste.status === '待审批' && canCurrentUser('action', 'waste-reject');
-  const canDispose = waste.status === '待处置' && canCurrentUser('special', 'wastes-dispose');
+  const canDispose = (waste.status === '待处置' || waste.status === '部分处置') && canCurrentUser('special', 'wastes-dispose');
 
   let expandContent = '';
   if (isExpanded) {
@@ -1124,12 +1130,53 @@ function renderWasteCard(waste, view) {
       let value;
       if (field.type === 'relation') {
         value = relationLabel(field, waste[field.name]);
+      } else if (field.name === 'disposedQuantity') {
+        value = disposedQty > 0 ? `${disposedQty}${unit}` : '-';
+      } else if (field.name === 'remainingQuantity') {
+        value = remainingQty > 0 ? `${remainingQty}${unit}` : (waste.status === '已处置' ? '0' + unit : '-');
+      } else if (field.name === 'disposalCount') {
+        value = disposalCount > 0 ? disposalCount + '次' : '-';
       } else {
         value = waste[field.name];
       }
       const displayValue = value === null || value === undefined || value === '' ? '-' : value;
       return `<div>${escapeHtml(field.label)}<br><strong>${escapeHtml(displayValue)}</strong></div>`;
     }).join('');
+
+    let disposalRecordsHtml = '';
+    if (Array.isArray(waste.disposalRecords) && waste.disposalRecords.length > 0) {
+      disposalRecordsHtml = `
+        <div class="waste-disposal-records">
+          <h4>处置明细记录（${waste.disposalRecords.length}次）</h4>
+          <div class="disposal-records-table">
+            <div class="dr-table-head">
+              <span>序号</span>
+              <span>处置数量</span>
+              <span>处置方式</span>
+              <span>见证人</span>
+              <span>扣减库存</span>
+              <span>盘亏抵充</span>
+              <span>处置人</span>
+              <span>处置时间</span>
+              <span>备注</span>
+            </div>
+            ${waste.disposalRecords.map((r) => `
+              <div class="dr-table-row">
+                <span class="dr-seq" data-label="序号">#${r.seq}</span>
+                <span class="dr-qty" data-label="处置数量"><strong>${r.actualQuantity}${escapeHtml(unit)}</strong></span>
+                <span data-label="处置方式">${escapeHtml(r.disposalMethod || '-')}</span>
+                <span data-label="见证人">${escapeHtml(r.witness || '-')}</span>
+                <span class="dr-stock" data-label="扣减库存">${Number(r.deductFromStock || 0) > 0 ? '-' + r.deductFromStock + escapeHtml(unit) : '-'}</span>
+                <span class="dr-offset" data-label="盘亏抵充">${Number(r.offsetByStocktake || 0) > 0 ? r.offsetByStocktake + escapeHtml(unit) : '-'}</span>
+                <span data-label="处置人">${escapeHtml(r.disposedBy || '-')}</span>
+                <span class="dr-time" data-label="处置时间">${fmtDate(r.disposedAt)}</span>
+                <span class="dr-note" data-label="备注">${escapeHtml(r.note || '-')}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
 
     let actionButtons = '';
     if (waste.status === '待审批') {
@@ -1140,17 +1187,20 @@ function renderWasteCard(waste, view) {
           ${!canApprove && !canReject ? `<span class="no-permission-tip-inline">⚠️ 当前角色无报废审批权限</span>` : ''}
         </div>
       `;
-    } else if (waste.status === '待处置') {
-      const actualQty = state.wasteEdits[waste.id]?.actualQuantity ?? waste.quantity;
+    } else if (waste.status === '待处置' || waste.status === '部分处置') {
+      const maxDisposeQty = remainingQty > 0 ? remainingQty : waste.quantity;
+      const defaultActualQty = state.wasteEdits[waste.id]?.actualQuantity ?? maxDisposeQty;
       const disposalMethod = state.wasteEdits[waste.id]?.disposalMethod || waste.disposalMethod || '';
       const witness = state.wasteEdits[waste.id]?.witness || waste.witness || '';
       const disposalNote = state.wasteEdits[waste.id]?.disposalNote || waste.disposalNote || '';
       const disabledAttr = canDispose ? '' : 'readonly disabled';
+      const statusHint = waste.status === '部分处置' ? `<div class="partial-disposal-hint">📌 当前处于部分处置状态，已处置 ${disposedQty}/${qty}${escapeHtml(unit)}，剩余 ${remainingQty}${escapeHtml(unit)} 可继续处置</div>` : '';
       actionButtons = `
         <div class="waste-dispose-form">
-          <h4>确认处置</h4>
+          <h4>${waste.status === '部分处置' ? '继续处置' : '确认处置'}</h4>
+          ${statusHint}
           <div class="form-grid">
-            <label>实际处置数量<input type="number" class="waste-input" data-waste-actual="${waste.id}" data-waste="${waste.id}" data-field="actualQuantity" value="${actualQty}" min="0" max="${waste.quantity}" ${disabledAttr}><span class="unit">${escapeHtml(unit)}</span></label>
+            <label>本次处置数量<input type="number" class="waste-input" data-waste-actual="${waste.id}" data-waste="${waste.id}" data-field="actualQuantity" value="${defaultActualQty}" min="0" max="${maxDisposeQty}" ${disabledAttr}><span class="unit">${escapeHtml(unit)}　(剩余可处置: ${maxDisposeQty}${escapeHtml(unit)})</span></label>
             <label>处置方式
               <select class="waste-input" data-waste-method="${waste.id}" data-waste="${waste.id}" data-field="disposalMethod" ${canDispose ? '' : 'disabled'}>
                 <option value="">请选择</option>
@@ -1161,24 +1211,26 @@ function renderWasteCard(waste, view) {
               </select>
             </label>
             <label>见证人<input type="text" class="waste-input" data-waste-witness="${waste.id}" data-waste="${waste.id}" data-field="witness" value="${escapeHtml(witness)}" ${disabledAttr}></label>
-            <label class="wide">处置备注<input type="text" class="waste-input" data-waste-note="${waste.id}" data-waste="${waste.id}" data-field="disposalNote" value="${escapeHtml(disposalNote)}" ${disabledAttr} placeholder="记录处置过程中的特殊情况..."></label>
+            <label class="wide">处置备注<input type="text" class="waste-input" data-waste-note="${waste.id}" data-waste="${waste.id}" data-field="disposalNote" value="${escapeHtml(disposalNote)}" ${disabledAttr} placeholder="记录本次处置过程中的特殊情况..."></label>
           </div>
           <div class="waste-actions">
-            ${canDispose ? `<button class="danger" data-waste-dispose="${waste.id}">确认处置并扣减库存</button>` : `<span class="no-permission-tip-inline">⚠️ 当前角色无报废处置权限</span>`}
+            ${canDispose ? `<button class="danger" data-waste-dispose="${waste.id}">${waste.status === '部分处置' ? '确认继续处置并扣减库存' : '确认处置并扣减库存'}</button>` : `<span class="no-permission-tip-inline">⚠️ 当前角色无报废处置权限</span>`}
           </div>
         </div>
       `;
     } else if (waste.status === '已处置') {
       actionButtons = `
         <div class="waste-disposed-info">
-          <h4>处置详情</h4>
+          <h4>处置完成详情</h4>
           <div class="form-grid">
-            <div class="meta">实际处置数量<br><strong>${waste.actualQuantity || waste.quantity || 0} ${escapeHtml(unit)}</strong></div>
-            <div class="meta">处置方式<br><strong>${escapeHtml(waste.disposalMethod || '-')}</strong></div>
+            <div class="meta">申请数量<br><strong>${qty} ${escapeHtml(unit)}</strong></div>
+            <div class="meta">累计已处置<br><strong>${disposedQty} ${escapeHtml(unit)}</strong></div>
+            <div class="meta">处置次数<br><strong>${disposalCount}次</strong></div>
+            <div class="meta">最终处置方式<br><strong>${escapeHtml(waste.disposalMethod || '-')}</strong></div>
             <div class="meta">见证人<br><strong>${escapeHtml(waste.witness || '-')}</strong></div>
-            <div class="meta">处置人<br><strong>${escapeHtml(waste.disposedBy || '-')}</strong></div>
+            <div class="meta">最终处置人<br><strong>${escapeHtml(waste.disposedBy || '-')}</strong></div>
           </div>
-          <div class="meta" style="margin-top:8px;">处置时间：${fmtDate(waste.disposedAt)}</div>
+          <div class="meta" style="margin-top:8px;">最终处置时间：${fmtDate(waste.disposedAt)}</div>
         </div>
       `;
     }
@@ -1190,13 +1242,27 @@ function renderWasteCard(waste, view) {
         ${waste.reason ? `<div class="meta">报废原因：${escapeHtml(waste.reason)}</div>` : ''}
         ${waste.note ? `<div class="meta">备注：${escapeHtml(waste.note)}</div>` : ''}
         ${waste.approver ? `<div class="meta">审批人：${escapeHtml(waste.approver)}　审批时间：${fmtDate(waste.approvedAt)}</div>` : ''}
+        <div class="waste-progress-section">
+          <div class="waste-progress-header">
+            <span>处置进度</span>
+            <span class="waste-progress-numbers"><strong>${disposedQty}</strong> / ${qty} ${escapeHtml(unit)} · 剩余 <strong>${remainingQty}</strong> ${escapeHtml(unit)} · ${progressPct}%</span>
+          </div>
+          <div class="waste-progress-bar">
+            <div class="waste-progress-fill" style="width:${progressPct}%;"></div>
+          </div>
+        </div>
         <div class="detail">${detailRows}</div>
+        ${disposalRecordsHtml}
         ${actionButtons}
       </div>
     `;
   }
 
-  return `<article class="card waste-card">
+  const qtySummary = disposedQty > 0
+    ? `<span class="meta">申请：${qty}${escapeHtml(unit)} · 已处置：<strong>${disposedQty}</strong>${escapeHtml(unit)} · 剩余：<strong>${remainingQty}</strong>${escapeHtml(unit)}</span>`
+    : `<span class="meta">申请数量：${qty}${escapeHtml(unit)}</span>`;
+
+  return `<article class="card waste-card ${waste.status === '部分处置' ? 'waste-partial' : ''}">
     <div class="card-head" data-expand-waste="${waste.id}" style="cursor:pointer;">
       <div>
         <h3>${escapeHtml(title)}</h3>
@@ -1204,7 +1270,7 @@ function renderWasteCard(waste, view) {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
         ${pill(waste.status, toneFor(waste.status))}
-        <span class="meta">申请数量：${waste.quantity || 0} ${escapeHtml(unit)}</span>
+        ${qtySummary}
         <span class="meta">${isExpanded ? '▲ 收起' : '▼ 展开详情'}</span>
       </div>
     </div>
@@ -2060,7 +2126,7 @@ function computeProjectClosureLocal(projectId) {
 
   const openRequestStatuses = ['待审批', '已审批', '已出库'];
   const openScheduleStatuses = ['调度待审批', '调度已审批', '调度已出库'];
-  const openWasteStatuses = ['待审批', '待处置'];
+  const openWasteStatuses = ['待审批', '待处置', '部分处置'];
 
   const openRequests = requests.filter((r) => openRequestStatuses.includes(r.status));
   const openSchedules = schedules.filter((s) => openScheduleStatuses.includes(s.status));
@@ -2200,13 +2266,15 @@ function renderProjectCard(project, view) {
     const wasteListHtml = total.wastes > 0
       ? closureSummary.details.wastes.map((w) => {
           const batchLabel = relationLabel({ collection: 'batches', labelFields: ['name', 'batchNo'] }, w.batchId);
-          const isOpen = ['待审批', '待处置'].includes(w.status);
+          const isOpen = ['待审批', '待处置', '部分处置'].includes(w.status);
+          const disposedQty = Number(w.disposedQuantity ?? w.actualQuantity ?? 0);
+          const qtyInfo = disposedQty > 0 ? ` · 已处置：${disposedQty}/${w.quantity}` : ` · 数量：${w.quantity}`;
           return `<div class="closure-item ${isOpen ? 'unclosed' : 'closed'}">
             <div class="closure-item-head">
               <span class="closure-item-title">${escapeHtml(w.code || w.title || w.id)}</span>
               ${pill(w.status, toneFor(w.status))}
             </div>
-            <div class="meta">批次：${escapeHtml(batchLabel)}　数量：${w.quantity}${escapeHtml(w.unit || '')}</div>
+            <div class="meta">批次：${escapeHtml(batchLabel)}${qtyInfo}${escapeHtml(w.unit || '')}</div>
             <div class="meta">申请人：${escapeHtml(w.applicant || '-')}　原因：${escapeHtml(w.reason || '-')}</div>
           </div>`;
         }).join('')

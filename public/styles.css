@@ -2204,3 +2204,206 @@ select[name="cabinetId"] option:disabled {
   }
 }
 
+/* 报废部分处置样式 */
+.waste-partial {
+  border-left: 4px solid var(--warn);
+  box-shadow: 0 2px 12px rgba(163, 92, 0, 0.08);
+}
+
+.waste-progress-section {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: rgba(163, 92, 0, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(163, 92, 0, 0.15);
+}
+
+.waste-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.waste-progress-numbers {
+  font-weight: 500;
+}
+
+.waste-progress-numbers strong {
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.waste-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.waste-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3c9e6e, #26734d);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.waste-card.waste-partial .waste-progress-fill {
+  background: linear-gradient(90deg, #e3a24d, #a35c00);
+}
+
+.partial-disposal-hint {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(163, 92, 0, 0.08);
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.waste-disposal-records {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.waste-disposal-records h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.disposal-records-table {
+  display: grid;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.dr-table-head {
+  display: grid;
+  grid-template-columns: 50px 90px 100px 80px 80px 80px 110px 130px 1fr;
+  background: var(--panel-2);
+  padding: 10px 12px;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.dr-table-row {
+  display: grid;
+  grid-template-columns: 50px 90px 100px 80px 80px 80px 110px 130px 1fr;
+  padding: 10px 12px;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.dr-table-row:last-child {
+  border-bottom: none;
+}
+
+.dr-table-row:nth-child(even) {
+  background: rgba(17, 97, 92, 0.02);
+}
+
+.dr-seq {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.dr-qty {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.dr-stock {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.dr-offset {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.dr-time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dr-note {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .dr-table-head,
+  .dr-table-row {
+    grid-template-columns: 40px 70px 80px 70px 70px 70px 90px 110px 1fr;
+    font-size: 11px;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 620px) {
+  .disposal-records-table {
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  .dr-table-head {
+    display: none;
+  }
+
+  .dr-table-row {
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 12px;
+    background: #fff !important;
+    gap: 8px 12px;
+  }
+
+  .dr-table-row > span {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .dr-table-row > span::before {
+    content: attr(data-label);
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: none;
+  }
+
+  .dr-seq::before { content: '序号'; }
+  .dr-qty::before { content: '处置数量'; }
+  .dr-table-row > span:nth-child(3)::before { content: '处置方式'; }
+  .dr-table-row > span:nth-child(4)::before { content: '见证人'; }
+  .dr-stock::before { content: '扣减库存'; }
+  .dr-offset::before { content: '盘亏抵充'; }
+  .dr-table-row > span:nth-child(7)::before { content: '处置人'; }
+  .dr-time::before { content: '处置时间'; }
+  .dr-note::before { content: '备注'; }
+}
+

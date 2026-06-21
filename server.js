@@ -55,7 +55,65 @@ function checkPermission(user, permType, key, res) {
 
 async function readDb() {
   const raw = await fs.readFile(DB_FILE, 'utf8');
-  return JSON.parse(raw);
+  const db = JSON.parse(raw);
+  migrateWastesData(db);
+  return db;
+}
+
+function migrateWastesData(db) {
+  if (!Array.isArray(db.wastes)) return;
+  let changed = false;
+  for (const waste of db.wastes) {
+    const qty = Number(waste.quantity || 0);
+    const actualQty = Number(waste.actualQuantity || 0);
+    let needUpdate = false;
+
+    if (!Array.isArray(waste.disposalRecords)) {
+      waste.disposalRecords = [];
+      if (waste.status === '已处置' && actualQty > 0) {
+        waste.disposalRecords.push({
+          id: `dr-${waste.id}-legacy`,
+          seq: 1,
+          actualQuantity: actualQty,
+          disposalMethod: waste.disposalMethod || '',
+          witness: waste.witness || '',
+          disposedAt: waste.disposedAt || waste.updatedAt || waste.createdAt,
+          disposedBy: waste.disposedBy || '',
+          disposedByInfo: waste.disposedByInfo || null,
+          deductFromStock: waste.isStocktakeInitiated ? Math.max(0, actualQty - Number(waste.stocktakeDeficitQty || 0)) : actualQty,
+          offsetByStocktake: waste.isStocktakeInitiated ? Math.min(actualQty, Number(waste.stocktakeDeficitQty || 0)) : 0,
+          note: waste.disposalNote || waste.note || '(历史数据迁移生成)'
+        });
+      }
+      needUpdate = true;
+    }
+
+    if (waste.disposedQuantity === undefined) {
+      if (waste.status === '已处置') {
+        waste.disposedQuantity = qty;
+      } else if (waste.disposalRecords.length > 0) {
+        waste.disposedQuantity = waste.disposalRecords.reduce((s, r) => s + Number(r.actualQuantity || 0), 0);
+      } else {
+        waste.disposedQuantity = 0;
+      }
+      needUpdate = true;
+    }
+
+    if (waste.remainingQuantity === undefined) {
+      waste.remainingQuantity = Math.max(0, qty - Number(waste.disposedQuantity || 0));
+      needUpdate = true;
+    }
+
+    if (waste.disposalCount === undefined) {
+      waste.disposalCount = waste.disposalRecords.length;
+      needUpdate = true;
+    }
+
+    if (needUpdate) changed = true;
+  }
+  if (changed) {
+    fs.writeFile(DB_FILE, JSON.stringify(db, null, 2) + '\n').catch(() => {});
+  }
 }
 
 async function writeDb(db) {
@@ -230,6 +288,10 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
       ...req.body,
       status: '待审批',
       actualQuantity: 0,
+      disposedQuantity: 0,
+      remainingQuantity: wasteQty,
+      disposalCount: 0,
+      disposalRecords: [],
       stocktakeId: stocktakeId,
       projectId: projectId,
       isStocktakeInitiated: isStocktakeInitiated,
@@ -440,8 +502,8 @@ app.delete('/api/:collection/:id', requireUser, async (req, res, next) => {
   if (collection === 'wastes') {
     const item = db[collection].find((entry) => entry.id === id);
     if (!item) return res.status(404).json({ error: 'not found' });
-    if (item.status === '待处置' || item.status === '已处置') {
-      return res.status(409).json({ error: '待处置或已处置的报废单不能删除' });
+    if (item.status === '待处置' || item.status === '部分处置' || item.status === '已处置') {
+      return res.status(409).json({ error: '待处置、部分处置或已处置的报废单不能删除' });
     }
   }
 
@@ -602,7 +664,7 @@ function getProjectClosureSummary(db, projectId) {
 
   const openRequestStatuses = ['待审批', '已审批', '已出库'];
   const openScheduleStatuses = ['调度待审批', '调度已审批', '调度已出库'];
-  const openWasteStatuses = ['待审批', '待处置'];
+  const openWasteStatuses = ['待审批', '待处置', '部分处置'];
 
   const openRequests = requests.filter((r) => openRequestStatuses.includes(r.status));
   const openSchedules = schedules.filter((s) => openScheduleStatuses.includes(s.status));
@@ -985,36 +1047,43 @@ app.post('/api/wastes/:id/dispose', requireUser, async (req, res) => {
   const { id } = req.params;
   const waste = db.wastes?.find((entry) => entry.id === id);
   if (!waste) return res.status(404).json({ error: '报废单不存在' });
-  if (waste.status !== '待处置') return res.status(409).json({ error: '只有待处置状态的报废单可以确认处置' });
+  if (waste.status !== '待处置' && waste.status !== '部分处置') return res.status(409).json({ error: '只有待处置或部分处置状态的报废单可以确认处置' });
 
   const batch = db.batches.find((b) => b.id === waste.batchId);
   if (!batch) return res.status(409).json({ error: '关联批次不存在' });
   if (batch.status === '已报废') return res.status(409).json({ error: '批次已报废' });
 
-  const actualQty = Number(req.body.actualQuantity ?? waste.quantity);
+  const actualQty = Number(req.body.actualQuantity ?? waste.remainingQuantity);
   const disposalMethod = req.body.disposalMethod || waste.disposalMethod || '';
   const witness = req.body.witness || waste.witness || '';
+  const disposalNote = req.body.disposalNote || '';
   const operator = req.currentUser;
   const disposedBy = `${operator.name}（${operator.roleLabel}）`;
 
   const wasteQty = Number(waste.quantity || 0);
+  const disposedQty = Number(waste.disposedQuantity || 0);
+  const remainingQty = Number(waste.remainingQuantity || wasteQty - disposedQty);
   const stockQty = Number(batch.quantity || 0);
   const reservedQty = Number(batch.reservedQuantity || 0);
   const availableQty = Math.max(0, stockQty - reservedQty);
   const isStocktakeInitiated = !!waste.isStocktakeInitiated;
   const stocktakeDeficitQty = Number(waste.stocktakeDeficitQty || 0);
   const stockAdjusted = !!waste.stockAdjusted;
+  const existingRecords = waste.disposalRecords || [];
+  const cumulativeStocktakeOffset = existingRecords.reduce((s, r) => s + Number(r.offsetByStocktake || 0), 0);
+  const remainingStocktakeOffset = Math.max(0, stocktakeDeficitQty - cumulativeStocktakeOffset);
 
   if (actualQty <= 0) return res.status(409).json({ error: '实际处置数量必须大于0' });
-  if (actualQty > wasteQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过申请数量(${wasteQty})` });
+  if (actualQty > remainingQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过剩余待处置数量(${remainingQty})` });
 
   if (isStocktakeInitiated) {
-    const maxAllowed = Math.min(stocktakeDeficitQty, availableQty + stocktakeDeficitQty);
+    const maxFromStock = Math.max(0, actualQty - remainingStocktakeOffset);
+    const maxAllowed = Math.min(remainingStocktakeOffset + availableQty, remainingQty);
     if (actualQty > maxAllowed) {
-      return res.status(409).json({ error: `盘点发起的报废处置数量(${actualQty})超过可报废上限${maxAllowed}${batch.unit || ''}（盘亏已扣减${stocktakeDeficitQty}${batch.unit || ''}，当前可用${availableQty}${batch.unit || ''}）` });
+      return res.status(409).json({ error: `本次处置数量(${actualQty})超过可处置上限${maxAllowed}${batch.unit || ''}（盘亏剩余可抵充${remainingStocktakeOffset}${batch.unit || ''}，当前可用库存${availableQty}${batch.unit || ''}）` });
     }
-    if (actualQty > stocktakeDeficitQty) {
-      return res.status(409).json({ error: `盘点发起的报废处置数量(${actualQty})不可超过盘亏数量(${stocktakeDeficitQty}${batch.unit || ''})` });
+    if (maxFromStock > availableQty) {
+      return res.status(409).json({ error: `需从库存扣减${maxFromStock}${batch.unit || ''}，但当前可用库存仅${availableQty}${batch.unit || ''}，有${reservedQty}已被调度预占` });
     }
   } else {
     if (actualQty > stockQty) return res.status(409).json({ error: `实际处置数量(${actualQty})超过当前库存(${stockQty})` });
@@ -1022,54 +1091,88 @@ app.post('/api/wastes/:id/dispose', requireUser, async (req, res) => {
   }
 
   const now = new Date().toISOString();
+  const newDisposedQty = disposedQty + actualQty;
+  const newRemainingQty = Math.max(0, wasteQty - newDisposedQty);
+  const newDisposalCount = existingRecords.length + 1;
+  const isFullyDisposed = newRemainingQty <= 0;
+  const newStatus = isFullyDisposed ? '已处置' : '部分处置';
 
   const beforeWaste = { ...waste };
   const beforeBatch = { ...batch };
 
-  waste.actualQuantity = actualQty;
+  let deductFromStock = 0;
+  let offsetByStocktake = 0;
+
+  if (isStocktakeInitiated && stockAdjusted) {
+    offsetByStocktake = Math.min(actualQty, remainingStocktakeOffset);
+    deductFromStock = Math.max(0, actualQty - offsetByStocktake);
+  } else {
+    deductFromStock = actualQty;
+    offsetByStocktake = 0;
+  }
+
+  const newQty = stockQty - deductFromStock;
+  const disposalRecord = {
+    id: `dr-${id}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+    seq: newDisposalCount,
+    actualQuantity: actualQty,
+    disposalMethod: disposalMethod,
+    witness: witness,
+    disposedAt: now,
+    disposedBy: disposedBy,
+    disposedByInfo: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
+    deductFromStock: deductFromStock,
+    offsetByStocktake: offsetByStocktake,
+    note: disposalNote
+  };
+
+  waste.actualQuantity = newDisposedQty;
+  waste.disposedQuantity = newDisposedQty;
+  waste.remainingQuantity = newRemainingQty;
+  waste.disposalCount = newDisposalCount;
+  waste.disposalRecords = [...existingRecords, disposalRecord];
   waste.disposalMethod = disposalMethod;
   waste.witness = witness;
-  waste.status = '已处置';
-  waste.disposedAt = now;
-  waste.disposedBy = disposedBy;
-  waste.disposedByInfo = { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel };
+  waste.status = newStatus;
+  if (isFullyDisposed) {
+    waste.disposedAt = now;
+    waste.disposedBy = disposedBy;
+    waste.disposedByInfo = disposalRecord.disposedByInfo;
+  }
   waste.updatedAt = now;
   waste.history = waste.history || [];
 
-  let newQty = stockQty;
-  let deductQty = 0;
-  const noteParts = [`报废单：${waste.code || waste.id}`, `实际处置：${actualQty}${batch.unit || ''}`];
+  const noteParts = [`报废单：${waste.code || waste.id}`, `第${newDisposalCount}次处置：${actualQty}${batch.unit || ''}`, `累计已处置：${newDisposedQty}/${wasteQty}${batch.unit || ''}`, `剩余待处置：${newRemainingQty}${batch.unit || ''}`];
 
   if (isStocktakeInitiated && stockAdjusted) {
-    const deductFromStock = Math.max(0, actualQty - stocktakeDeficitQty);
-    deductQty = deductFromStock;
-    newQty = stockQty - deductFromStock;
     if (deductFromStock > 0) {
       noteParts.push(`从库存扣减：-${deductFromStock}${batch.unit || ''}`);
-      noteParts.push(`盘亏已扣减抵充：${Math.min(actualQty, stocktakeDeficitQty)}${batch.unit || ''}`);
-    } else {
-      noteParts.push('全部由盘点盘亏已扣减抵充，不扣减当前库存');
+    }
+    if (offsetByStocktake > 0) {
+      noteParts.push(`盘亏已扣减抵充：${offsetByStocktake}${batch.unit || ''}`);
     }
     noteParts.push(`剩余库存：${newQty}${batch.unit || ''}`);
-    waste.history.unshift(stamp('确认处置(盘点发起)', `实际处置：${actualQty}${batch.unit || ''}，其中盘亏已扣减抵充：${Math.min(actualQty, stocktakeDeficitQty)}${batch.unit || ''}，从库存扣减：${deductFromStock}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}`, operator));
+    const stampLabel = isFullyDisposed ? '确认处置完成(盘点发起)' : '部分处置(盘点发起)';
+    waste.history.unshift(stamp(stampLabel, `第${newDisposalCount}次处置：${actualQty}${batch.unit || ''}，其中盘亏抵充：${offsetByStocktake}${batch.unit || ''}，从库存扣减：${deductFromStock}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}${disposalNote ? `，备注：${disposalNote}` : ''}，累计：${newDisposedQty}/${wasteQty}${batch.unit || ''}，剩余：${newRemainingQty}${batch.unit || ''}${isFullyDisposed ? '，全部处置完成' : ''}`, operator));
   } else {
-    deductQty = actualQty;
-    newQty = stockQty - actualQty;
     noteParts.push(`报废数量：-${actualQty}${batch.unit || ''}`);
     noteParts.push(`剩余库存：${newQty}${batch.unit || ''}`);
-    waste.history.unshift(stamp('确认处置', `实际处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}`, operator));
+    const stampLabel = isFullyDisposed ? '确认处置完成' : '部分处置';
+    waste.history.unshift(stamp(stampLabel, `第${newDisposalCount}次处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}${disposalNote ? `，备注：${disposalNote}` : ''}，累计：${newDisposedQty}/${wasteQty}${batch.unit || ''}，剩余：${newRemainingQty}${batch.unit || ''}${isFullyDisposed ? '，全部处置完成' : ''}`, operator));
   }
 
   batch.quantity = newQty;
   batch.updatedAt = now;
   batch.history = batch.history || [];
 
-  if (newQty <= 0 && stocktakeDeficitQty <= 0) {
+  if (newQty <= 0 && stocktakeDeficitQty - cumulativeStocktakeOffset - offsetByStocktake <= 0) {
     batch.status = '已报废';
     noteParts.push('库存清零，批次状态更新为已报废');
   }
 
-  const batchAction = isStocktakeInitiated ? '报废扣减(盘点发起)' : '报废扣减';
+  const batchAction = isStocktakeInitiated
+    ? (isFullyDisposed ? '报废扣减完成(盘点发起)' : '报废扣减(盘点发起)')
+    : (isFullyDisposed ? '报废扣减完成' : '报废扣减');
   batch.history.unshift(stamp(batchAction, noteParts.join('，'), operator));
 
   if (waste.stocktakeId) {
@@ -1078,43 +1181,46 @@ app.post('/api/wastes/:id/dispose', requireUser, async (req, res) => {
       if (stocktake.diffSuggestions) {
         const diffItem = stocktake.diffSuggestions.find((d) => d.batchId === waste.batchId);
         if (diffItem) {
-          diffItem.actionStatus = 'completed';
-          diffItem.actualWasteQty = actualQty;
-          diffItem.deductedFromStock = deductQty;
+          diffItem.actionStatus = isFullyDisposed ? 'completed' : 'registered';
+          diffItem.actualWasteQty = newDisposedQty;
+          diffItem.deductedFromStock = (diffItem.deductedFromStock || 0) + deductFromStock;
+          diffItem.totalOffsetByStocktake = (diffItem.totalOffsetByStocktake || 0) + offsetByStocktake;
         }
       }
       if (stocktake.items) {
         const stocktakeItem = stocktake.items.find((i) => i.batchId === waste.batchId);
         if (stocktakeItem) {
-          stocktakeItem.actionStatus = 'completed';
-          stocktakeItem.actualWasteQty = actualQty;
-          stocktakeItem.deductedFromStock = deductQty;
+          stocktakeItem.actionStatus = isFullyDisposed ? 'completed' : 'registered';
+          stocktakeItem.actualWasteQty = newDisposedQty;
+          stocktakeItem.deductedFromStock = (stocktakeItem.deductedFromStock || 0) + deductFromStock;
         }
       }
-      if (stocktake.suggestionSummary) {
+      if (stocktake.suggestionSummary && isFullyDisposed) {
         stocktake.suggestionSummary.completedCount = (stocktake.suggestionSummary.completedCount || 0) + 1;
       }
       stocktake.updatedAt = now;
       stocktake.history = stocktake.history || [];
-      stocktake.history.unshift(stamp('差异处理完成', `盘亏批次「${batch.name} / ${batch.batchNo}」已完成报废处置，实际报废：${actualQty}${batch.unit || ''}，扣减库存：${deductQty}${batch.unit || ''}，盘亏抵充：${actualQty - deductQty}${batch.unit || ''}`, operator));
+      const summaryLabel = isFullyDisposed ? '差异处理完成' : '差异部分处理';
+      stocktake.history.unshift(stamp(summaryLabel, `盘亏批次「${batch.name} / ${batch.batchNo}」${isFullyDisposed ? '已完成' : '第' + newDisposalCount + '次'}报废处置，本次处置：${actualQty}${batch.unit || ''}，累计：${newDisposedQty}${batch.unit || ''}，扣减库存：${deductFromStock}${batch.unit || ''}，盘亏抵充：${offsetByStocktake}${batch.unit || ''}${isFullyDisposed ? `，全部完成` : `，剩余待处置：${newRemainingQty}${batch.unit || ''}`}`, operator));
       writeAuditLog(db, {
-        actionType: '盘点差异处理完成',
+        actionType: isFullyDisposed ? '盘点差异处理完成' : '盘点差异部分处理',
         collection: 'stocktakes',
         targetId: stocktake.id,
         targetItem: stocktake,
-        note: `盘亏批次「${batch.name} / ${batch.batchNo}」已完成报废处置，实际报废：${actualQty}${batch.unit || ''}`,
+        note: `盘亏批次「${batch.name} / ${batch.batchNo}」${isFullyDisposed ? '已完成' : '第' + newDisposalCount + '次'}报废处置，本次：${actualQty}${batch.unit || ''}，累计：${newDisposedQty}${batch.unit || ''}`,
         operator
       });
     }
   }
 
+  const auditActionType = isFullyDisposed ? '确认处置' : '部分处置';
   writeAuditLog(db, {
-    actionType: '确认处置',
+    actionType: auditActionType,
     collection: 'wastes',
     targetId: waste.id,
     targetItem: waste,
     beforeItem: beforeWaste,
-    note: `实际处置：${actualQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}${isStocktakeInitiated ? '（盘点发起）' : ''}`,
+    note: `第${newDisposalCount}次处置：${actualQty}${batch.unit || ''}，累计：${newDisposedQty}/${wasteQty}${batch.unit || ''}，剩余：${newRemainingQty}${batch.unit || ''}，处置方式：${disposalMethod || '未指定'}，见证人：${witness || '未记录'}${isStocktakeInitiated ? '（盘点发起）' : ''}`,
     operator
   });
 

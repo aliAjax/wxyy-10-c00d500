@@ -938,7 +938,25 @@
       "approvedAt": "2026-06-20T09:09:21.532Z",
       "actualQuantity": 5,
       "disposedAt": "2026-06-20T09:09:42.087Z",
-      "disposedBy": "张伟"
+      "disposedBy": "张伟",
+      "disposalRecords": [
+        {
+          "id": "dr-wastes-1781946541870-22b51-legacy",
+          "seq": 1,
+          "actualQuantity": 5,
+          "disposalMethod": "专业机构回收",
+          "witness": "李明",
+          "disposedAt": "2026-06-20T09:09:42.087Z",
+          "disposedBy": "张伟",
+          "disposedByInfo": null,
+          "deductFromStock": 5,
+          "offsetByStocktake": 0,
+          "note": "6月例行报废处理"
+        }
+      ],
+      "disposedQuantity": 5,
+      "remainingQuantity": 0,
+      "disposalCount": 1
     },
     {
       "id": "wastes-1782008238617-b8c57",
@@ -975,7 +993,11 @@
           },
           "operatorLabel": "张伟（库管员）"
         }
-      ]
+      ],
+      "disposalRecords": [],
+      "disposedQuantity": 0,
+      "remainingQuantity": 10,
+      "disposalCount": 0
     }
   ],
   "schedules": [

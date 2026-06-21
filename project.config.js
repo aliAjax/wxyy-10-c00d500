@@ -102,6 +102,7 @@ module.exports = {
     '已取消': 'bad',
     '已处置': 'ok',
     '待处置': 'warn',
+    '部分处置': 'warn',
     '调度待审批': 'warn',
     '调度已审批': 'warn',
     '调度已出库': 'warn',
@@ -142,6 +143,7 @@ module.exports = {
     { label: '报废单', collection: 'wastes' },
     { label: '待审批报废', collection: 'wastes', filter: { field: 'status', value: '待审批' } },
     { label: '待处置报废', collection: 'wastes', filter: { field: 'status', value: '待处置' } },
+    { label: '部分处置报废', collection: 'wastes', filter: { field: 'status', value: '部分处置' } },
     { label: '已处置报废', collection: 'wastes', filter: { field: 'status', value: '已处置' } }
   ],
   views: [
@@ -400,7 +402,7 @@ module.exports = {
       searchPlaceholder: '搜索报废单号、标题、申请人',
       searchFields: ['code', 'title', 'applicant', 'reason', 'note'],
       statusField: 'status',
-      statusOptions: ['待审批', '已驳回', '待处置', '已处置'],
+      statusOptions: ['待审批', '已驳回', '待处置', '部分处置', '已处置'],
       titleFields: ['code', 'title'],
       summaryFields: ['applicant', 'reason'],
       defaults: { status: '待审批', actualQuantity: 0 },
@@ -408,6 +410,9 @@ module.exports = {
       detailFields: [
         { label: '演出项目', name: 'projectId', type: 'relation', collection: 'projects', labelFields: ['name', 'venue'] },
         { label: '申请数量', name: 'quantity' },
+        { label: '累计已处置', name: 'disposedQuantity' },
+        { label: '剩余待处置', name: 'remainingQuantity' },
+        { label: '处置次数', name: 'disposalCount' },
         { label: '实际处置', name: 'actualQuantity' },
         { label: '处置方式', name: 'disposalMethod' },
         { label: '见证人', name: 'witness' },
@@ -471,7 +476,7 @@ module.exports = {
     { id: 'schedule-reject', label: '驳回', collection: 'schedules', danger: true, patches: [{ field: 'status', value: '调度已驳回' }] }
   ],
   auditLog: {
-    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消', '调度创建', '调度审批通过', '调度驳回', '调度出库', '调度出库(关联)', '调度回库', '调度回库(关联)', '预占库存', '释放预占', '批量导入', '批量导入创建'],
+    actionTypes: ['创建', '更新', '删除', '审批通过', '驳回', '出库', '出库(关联)', '回库闭环', '可用', '锁定', '报废', '盘点录入', '盘点确认', '确认处置', '部分处置', '报废审批(关联)', '报废扣减(关联)', '合作中', '暂停', '资质过期', '空闲', '使用中', '已满', '停用', '筹备中', '进行中', '已完成', '取消', '调度创建', '调度审批通过', '调度驳回', '调度出库', '调度出库(关联)', '调度回库', '调度回库(关联)', '预占库存', '释放预占', '批量导入', '批量导入创建'],
     targetCollections: ['batches', 'requests', 'schedules', 'wastes', 'stocktakes', 'suppliers', 'cabinets', 'projects']
   }
 };
