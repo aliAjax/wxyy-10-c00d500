@@ -140,6 +140,66 @@
           "operatorLabel": "张伟（库管员）"
         }
       ]
+    },
+    {
+      "id": "cabinets-1782023651024-045e8",
+      "code": "累加测试柜Z",
+      "area": "测试区域",
+      "capacity": 10,
+      "manager": "测试负责人",
+      "status": "使用中",
+      "createdAt": "2026-06-21T06:34:11.020Z",
+      "updatedAt": "2026-06-21T06:34:11.020Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:34:11.024Z",
+          "action": "批量导入创建",
+          "note": "柜位「累加测试柜Z」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "cabinets-1782023651027-f958b",
+      "code": "混合测试柜M",
+      "area": "M区测试库房",
+      "capacity": 20,
+      "manager": "M负责人",
+      "status": "使用中",
+      "createdAt": "2026-06-21T06:34:11.027Z",
+      "updatedAt": "2026-06-21T06:34:11.027Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:34:11.027Z",
+          "action": "批量导入创建",
+          "note": "柜位「混合测试柜M」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
     }
   ],
   "batches": [
@@ -551,6 +611,111 @@
           "operatorLabel": "张伟（库管员）"
         }
       ]
+    },
+    {
+      "id": "batches-1782023476314-0047f",
+      "name": "测试药剂1",
+      "category": "冷焰火",
+      "batchNo": "TEST-ISOLATED-001",
+      "supplierId": "suppliers-1782023476314-5a110",
+      "cabinetId": "",
+      "safetyLevel": "高",
+      "quantity": 100,
+      "unit": "罐",
+      "expiresAt": "2027-12-31",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:31:16.314Z",
+      "updatedAt": "2026-06-21T06:31:16.314Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:31:16.314Z",
+          "action": "批量导入",
+          "note": "导入100罐，自动创建关联供应商/柜位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "batches-1782023651024-ced28",
+      "name": "测试药剂3",
+      "category": "冷焰火",
+      "batchNo": "TEST-PENDCAP-001",
+      "supplierId": "suppliers-1782023651023-bd8ed",
+      "cabinetId": "cabinets-1782023651024-045e8",
+      "safetyLevel": "高",
+      "quantity": 6,
+      "unit": "罐",
+      "expiresAt": "2027-12-31",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:34:11.020Z",
+      "updatedAt": "2026-06-21T06:34:11.020Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:34:11.024Z",
+          "action": "批量导入",
+          "note": "导入6罐，自动创建关联供应商/柜位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "batches-1782023651027-8aea4",
+      "name": "成功测试药剂",
+      "category": "礼花",
+      "batchNo": "TEST-MIXED-GOOD",
+      "supplierId": "suppliers-1782023651027-83cf0",
+      "cabinetId": "cabinets-1782023651027-f958b",
+      "safetyLevel": "中",
+      "quantity": 2,
+      "unit": "发",
+      "expiresAt": "2028-06-30",
+      "status": "可用",
+      "createdAt": "2026-06-21T06:34:11.027Z",
+      "updatedAt": "2026-06-21T06:34:11.027Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:34:11.027Z",
+          "action": "批量导入",
+          "note": "导入2发，自动创建关联供应商/柜位",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
     }
   ],
   "requests": [
@@ -783,6 +948,102 @@
           "at": "2026-06-21T06:13:44.555Z",
           "action": "批量导入创建",
           "note": "供应商「紫光科技公司」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "suppliers-1782023476314-5a110",
+      "name": "孤立测试供应商A",
+      "contact": "张经理",
+      "phone": "138-0000-0001",
+      "category": "冷焰火类",
+      "riskLevel": "中",
+      "certExpiresAt": "2029-06-30",
+      "status": "合作中",
+      "createdAt": "2026-06-21T06:31:16.314Z",
+      "updatedAt": "2026-06-21T06:31:16.314Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:31:16.314Z",
+          "action": "批量导入创建",
+          "note": "供应商「孤立测试供应商A」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "suppliers-1782023651023-bd8ed",
+      "name": "累加测试供应商X",
+      "contact": "王经理",
+      "phone": "138-0000-0003",
+      "category": "冷焰火类",
+      "riskLevel": "中",
+      "certExpiresAt": "2029-06-30",
+      "status": "合作中",
+      "createdAt": "2026-06-21T06:34:11.020Z",
+      "updatedAt": "2026-06-21T06:34:11.020Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:34:11.023Z",
+          "action": "批量导入创建",
+          "note": "供应商「累加测试供应商X」由批量导入自动创建",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        }
+      ]
+    },
+    {
+      "id": "suppliers-1782023651027-83cf0",
+      "name": "混合测试供应商",
+      "contact": "赵经理",
+      "phone": "138-0000-0004",
+      "category": "礼花类",
+      "riskLevel": "中",
+      "certExpiresAt": "2029-12-31",
+      "status": "合作中",
+      "createdAt": "2026-06-21T06:34:11.027Z",
+      "updatedAt": "2026-06-21T06:34:11.027Z",
+      "createdBy": {
+        "id": "user-staff-1",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "history": [
+        {
+          "at": "2026-06-21T06:34:11.027Z",
+          "action": "批量导入创建",
+          "note": "供应商「混合测试供应商」由批量导入自动创建",
           "operator": {
             "id": "user-staff-1",
             "name": "张伟",
@@ -1037,6 +1298,605 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1782023651027-bd9b5",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782023651027-8aea4",
+      "targetLabel": "成功测试药剂 / TEST-MIXED-GOOD",
+      "changes": {
+        "id": {
+          "after": "batches-1782023651027-8aea4"
+        },
+        "name": {
+          "after": "成功测试药剂"
+        },
+        "category": {
+          "after": "礼花"
+        },
+        "batchNo": {
+          "after": "TEST-MIXED-GOOD"
+        },
+        "supplierId": {
+          "after": "suppliers-1782023651027-83cf0"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782023651027-f958b"
+        },
+        "safetyLevel": {
+          "after": "中"
+        },
+        "quantity": {
+          "after": 2
+        },
+        "unit": {
+          "after": "发"
+        },
+        "expiresAt": {
+          "after": "2028-06-30"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:34:11.027Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:34:11.027Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:34:11.027Z",
+              "action": "批量导入",
+              "note": "导入2发，自动创建关联供应商/柜位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：2发，供应商「混合测试供应商」待创建，柜位「混合测试柜M」待创建",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:34:11.027Z"
+    },
+    {
+      "id": "auditLogs-1782023651027-a238f",
+      "actionType": "批量导入创建",
+      "targetCollection": "cabinets",
+      "targetId": "cabinets-1782023651027-f958b",
+      "targetLabel": "混合测试柜M / M区测试库房",
+      "changes": {
+        "id": {
+          "after": "cabinets-1782023651027-f958b"
+        },
+        "code": {
+          "after": "混合测试柜M"
+        },
+        "area": {
+          "after": "M区测试库房"
+        },
+        "capacity": {
+          "after": 20
+        },
+        "manager": {
+          "after": "M负责人"
+        },
+        "status": {
+          "after": "使用中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:34:11.027Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:34:11.027Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:34:11.027Z",
+              "action": "批量导入创建",
+              "note": "柜位「混合测试柜M」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建柜位：混合测试柜M",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:34:11.027Z"
+    },
+    {
+      "id": "auditLogs-1782023651027-81053",
+      "actionType": "批量导入创建",
+      "targetCollection": "suppliers",
+      "targetId": "suppliers-1782023651027-83cf0",
+      "targetLabel": "混合测试供应商",
+      "changes": {
+        "id": {
+          "after": "suppliers-1782023651027-83cf0"
+        },
+        "name": {
+          "after": "混合测试供应商"
+        },
+        "contact": {
+          "after": "赵经理"
+        },
+        "phone": {
+          "after": "138-0000-0004"
+        },
+        "category": {
+          "after": "礼花类"
+        },
+        "riskLevel": {
+          "after": "中"
+        },
+        "certExpiresAt": {
+          "after": "2029-12-31"
+        },
+        "status": {
+          "after": "合作中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:34:11.027Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:34:11.027Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:34:11.027Z",
+              "action": "批量导入创建",
+              "note": "供应商「混合测试供应商」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建供应商：混合测试供应商",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:34:11.027Z"
+    },
+    {
+      "id": "auditLogs-1782023651024-50b41",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782023651024-ced28",
+      "targetLabel": "测试药剂3 / TEST-PENDCAP-001",
+      "changes": {
+        "id": {
+          "after": "batches-1782023651024-ced28"
+        },
+        "name": {
+          "after": "测试药剂3"
+        },
+        "category": {
+          "after": "冷焰火"
+        },
+        "batchNo": {
+          "after": "TEST-PENDCAP-001"
+        },
+        "supplierId": {
+          "after": "suppliers-1782023651023-bd8ed"
+        },
+        "cabinetId": {
+          "after": "cabinets-1782023651024-045e8"
+        },
+        "safetyLevel": {
+          "after": "高"
+        },
+        "quantity": {
+          "after": 6
+        },
+        "unit": {
+          "after": "罐"
+        },
+        "expiresAt": {
+          "after": "2027-12-31"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:34:11.020Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:34:11.020Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:34:11.024Z",
+              "action": "批量导入",
+              "note": "导入6罐，自动创建关联供应商/柜位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：6罐，供应商「累加测试供应商X」待创建，柜位「累加测试柜Z」待创建",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:34:11.024Z"
+    },
+    {
+      "id": "auditLogs-1782023651024-87e36",
+      "actionType": "批量导入创建",
+      "targetCollection": "cabinets",
+      "targetId": "cabinets-1782023651024-045e8",
+      "targetLabel": "累加测试柜Z / 测试区域",
+      "changes": {
+        "id": {
+          "after": "cabinets-1782023651024-045e8"
+        },
+        "code": {
+          "after": "累加测试柜Z"
+        },
+        "area": {
+          "after": "测试区域"
+        },
+        "capacity": {
+          "after": 10
+        },
+        "manager": {
+          "after": "测试负责人"
+        },
+        "status": {
+          "after": "使用中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:34:11.020Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:34:11.020Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:34:11.024Z",
+              "action": "批量导入创建",
+              "note": "柜位「累加测试柜Z」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建柜位：累加测试柜Z",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:34:11.024Z"
+    },
+    {
+      "id": "auditLogs-1782023651023-01dd4",
+      "actionType": "批量导入创建",
+      "targetCollection": "suppliers",
+      "targetId": "suppliers-1782023651023-bd8ed",
+      "targetLabel": "累加测试供应商X",
+      "changes": {
+        "id": {
+          "after": "suppliers-1782023651023-bd8ed"
+        },
+        "name": {
+          "after": "累加测试供应商X"
+        },
+        "contact": {
+          "after": "王经理"
+        },
+        "phone": {
+          "after": "138-0000-0003"
+        },
+        "category": {
+          "after": "冷焰火类"
+        },
+        "riskLevel": {
+          "after": "中"
+        },
+        "certExpiresAt": {
+          "after": "2029-06-30"
+        },
+        "status": {
+          "after": "合作中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:34:11.020Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:34:11.020Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:34:11.023Z",
+              "action": "批量导入创建",
+              "note": "供应商「累加测试供应商X」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建供应商：累加测试供应商X",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:34:11.023Z"
+    },
+    {
+      "id": "auditLogs-1782023476314-cd98c",
+      "actionType": "批量导入",
+      "targetCollection": "batches",
+      "targetId": "batches-1782023476314-0047f",
+      "targetLabel": "测试药剂1 / TEST-ISOLATED-001",
+      "changes": {
+        "id": {
+          "after": "batches-1782023476314-0047f"
+        },
+        "name": {
+          "after": "测试药剂1"
+        },
+        "category": {
+          "after": "冷焰火"
+        },
+        "batchNo": {
+          "after": "TEST-ISOLATED-001"
+        },
+        "supplierId": {
+          "after": "suppliers-1782023476314-5a110"
+        },
+        "cabinetId": {
+          "after": ""
+        },
+        "safetyLevel": {
+          "after": "高"
+        },
+        "quantity": {
+          "after": 100
+        },
+        "unit": {
+          "after": "罐"
+        },
+        "expiresAt": {
+          "after": "2027-12-31"
+        },
+        "status": {
+          "after": "可用"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:31:16.314Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:31:16.314Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:31:16.314Z",
+              "action": "批量导入",
+              "note": "导入100罐，自动创建关联供应商/柜位",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入批次，数量：100罐，供应商「孤立测试供应商A」待创建",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:31:16.314Z"
+    },
+    {
+      "id": "auditLogs-1782023476314-60355",
+      "actionType": "批量导入创建",
+      "targetCollection": "suppliers",
+      "targetId": "suppliers-1782023476314-5a110",
+      "targetLabel": "孤立测试供应商A",
+      "changes": {
+        "id": {
+          "after": "suppliers-1782023476314-5a110"
+        },
+        "name": {
+          "after": "孤立测试供应商A"
+        },
+        "contact": {
+          "after": "张经理"
+        },
+        "phone": {
+          "after": "138-0000-0001"
+        },
+        "category": {
+          "after": "冷焰火类"
+        },
+        "riskLevel": {
+          "after": "中"
+        },
+        "certExpiresAt": {
+          "after": "2029-06-30"
+        },
+        "status": {
+          "after": "合作中"
+        },
+        "createdAt": {
+          "after": "2026-06-21T06:31:16.314Z"
+        },
+        "updatedAt": {
+          "after": "2026-06-21T06:31:16.314Z"
+        },
+        "createdBy": {
+          "after": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          }
+        },
+        "history": {
+          "after": [
+            {
+              "at": "2026-06-21T06:31:16.314Z",
+              "action": "批量导入创建",
+              "note": "供应商「孤立测试供应商A」由批量导入自动创建",
+              "operator": {
+                "id": "user-staff-1",
+                "name": "张伟",
+                "role": "librarian",
+                "roleLabel": "库管员"
+              },
+              "operatorLabel": "张伟（库管员）"
+            }
+          ]
+        }
+      },
+      "note": "批量导入自动创建供应商：孤立测试供应商A",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-21T06:31:16.314Z"
+    },
     {
       "id": "auditLogs-1782022424555-68389",
       "actionType": "批量导入",

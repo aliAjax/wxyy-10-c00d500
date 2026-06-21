@@ -1455,6 +1455,140 @@ function validatePendingCabinet(cabinetData) {
   return errors;
 }
 
+function preValidateImportRows(rows, db) {
+  const result = {
+    approvedRows: [],
+    failed: [],
+    supplierMap: {},
+    cabinetMap: {},
+    pendingCabinetAccumQty: {}
+  };
+
+  const existingSupplierNameToId = {};
+  const existingCabinetCodeToId = {};
+  (db.suppliers || []).forEach(s => { existingSupplierNameToId[s.name] = s.id; });
+  (db.cabinets || []).forEach(c => { existingCabinetCodeToId[c.code] = c.id; });
+
+  const seenBatchNos = new Set();
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowData = row.data || row;
+    const pendingCreate = row.pendingCreate || {};
+    const batchNo = rowData.batchNo;
+    const rowErrors = [];
+
+    if (!batchNo) {
+      result.failed.push({ rowIndex: i + 2, error: '批次号为空' });
+      continue;
+    }
+
+    if (db.batches.some((b) => b.batchNo === batchNo) || seenBatchNos.has(batchNo)) {
+      result.failed.push({ batchNo, error: '批次号已存在' });
+      continue;
+    }
+    seenBatchNos.add(batchNo);
+
+    let supplierId = rowData.supplierId || '';
+    if (pendingCreate.supplier && !supplierId) {
+      const supplierErrors = validatePendingSupplier(pendingCreate.supplier);
+      if (supplierErrors.length > 0) {
+        rowErrors.push(...supplierErrors.map(e => `供应商：${e}`));
+      } else {
+        const supplierName = pendingCreate.supplier.name;
+        if (existingSupplierNameToId[supplierName]) {
+          supplierId = existingSupplierNameToId[supplierName];
+        } else if (result.supplierMap[supplierName]) {
+          supplierId = result.supplierMap[supplierName].tempId;
+        } else {
+          const tempId = `temp-supplier-${supplierName}`;
+          result.supplierMap[supplierName] = { tempId, data: pendingCreate.supplier };
+          supplierId = tempId;
+        }
+      }
+    }
+
+    let cabinetId = rowData.cabinetId || '';
+    let pendingCabinetData = null;
+    if (pendingCreate.cabinet && !cabinetId) {
+      const cabinetErrors = validatePendingCabinet(pendingCreate.cabinet);
+      if (cabinetErrors.length > 0) {
+        rowErrors.push(...cabinetErrors.map(e => `柜位：${e}`));
+      } else {
+        const cabinetCode = pendingCreate.cabinet.code;
+        pendingCabinetData = pendingCreate.cabinet;
+        if (existingCabinetCodeToId[cabinetCode]) {
+          cabinetId = existingCabinetCodeToId[cabinetCode];
+        } else if (result.cabinetMap[cabinetCode]) {
+          cabinetId = result.cabinetMap[cabinetCode].tempId;
+        } else {
+          const tempId = `temp-cabinet-${cabinetCode}`;
+          result.cabinetMap[cabinetCode] = { tempId, data: pendingCreate.cabinet };
+          cabinetId = tempId;
+        }
+      }
+    }
+
+    if (rowErrors.length > 0) {
+      result.failed.push({ batchNo, errors: rowErrors });
+      continue;
+    }
+
+    const addQty = Number(rowData.quantity || 0);
+    if (cabinetId) {
+      if (pendingCabinetData) {
+        const cabinetCode = pendingCabinetData.code;
+        const accumKey = `pending:${cabinetCode}`;
+        const currentOccupied = result.pendingCabinetAccumQty[accumKey] || 0;
+        const capacity = Number(pendingCabinetData.capacity || 0);
+        const newOccupied = currentOccupied + addQty;
+        if (newOccupied > capacity) {
+          const diff = addQty >= 0 ? `本次新增${addQty}` : `本次调整${addQty}`;
+          result.failed.push({
+            batchNo,
+            error: `柜位「${cabinetCode}（待创建）」容量不足：容量${capacity}，本批次导入累计占用${currentOccupied}，${diff}，合计将占用${newOccupied}，超出${newOccupied - capacity}`
+          });
+          continue;
+        }
+        result.pendingCabinetAccumQty[accumKey] = newOccupied;
+      } else {
+        const occ = computeCabinetOccupancy(db, cabinetId);
+        if (occ) {
+          const accumKey = `existing:${cabinetId}`;
+          const extraQty = result.pendingCabinetAccumQty[accumKey] || 0;
+          const tempOcc = {
+            ...occ,
+            occupiedQuantity: occ.occupiedQuantity + extraQty,
+            remainingQuantity: occ.capacity - (occ.occupiedQuantity + extraQty),
+            occupancyRate: occ.capacity > 0 ? Math.round(((occ.occupiedQuantity + extraQty) / occ.capacity) * 100) : 0
+          };
+          const newOccupied = tempOcc.occupiedQuantity + addQty;
+          if (newOccupied > occ.capacity) {
+            const diff = addQty >= 0 ? `本次新增${addQty}` : `本次调整${addQty}`;
+            result.failed.push({
+              batchNo,
+              error: `柜位「${occ.cabinetCode}（${occ.cabinetArea}）」容量不足：容量${occ.capacity}，已占用${occ.occupiedQuantity}，本批次导入累计待加${extraQty}，${diff}，合计将占用${newOccupied}，超出${newOccupied - occ.capacity}`
+            });
+            continue;
+          }
+          result.pendingCabinetAccumQty[accumKey] = extraQty + addQty;
+        }
+      }
+    }
+
+    result.approvedRows.push({
+      ...row,
+      _supplierId: supplierId,
+      _cabinetId: cabinetId,
+      _pendingSupplierName: pendingCreate.supplier?.name || null,
+      _pendingCabinetCode: pendingCreate.cabinet?.code || null,
+      _addQty: addQty
+    });
+  }
+
+  return result;
+}
+
 app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
   if (!checkPermission(req.currentUser, 'special', 'batches-import', res)) return;
 
@@ -1467,85 +1601,56 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
     const operator = req.currentUser;
     const db = await readDb();
     const now = new Date().toISOString();
+
+    const preResult = preValidateImportRows(rows, db);
+    const failed = preResult.failed;
+    const approved = preResult.approvedRows;
+
     const imported = [];
     const createdSuppliers = [];
     const createdCabinets = [];
-    const failed = [];
 
     const supplierNameToId = {};
     const cabinetCodeToId = {};
     (db.suppliers || []).forEach(s => { supplierNameToId[s.name] = s.id; });
     (db.cabinets || []).forEach(c => { cabinetCodeToId[c.code] = c.id; });
 
-    for (const row of rows) {
+    for (const row of approved) {
       const rowData = row.data || row;
       const pendingCreate = row.pendingCreate || {};
       const batchNo = rowData.batchNo;
-      const rowErrors = [];
 
-      if (db.batches.some((b) => b.batchNo === batchNo) || imported.some(b => b.batchNo === batchNo)) {
-        failed.push({ batchNo, error: '批次号已存在' });
-        continue;
-      }
-
-      let supplierId = rowData.supplierId || '';
-      if (pendingCreate.supplier && !supplierId) {
-        const supplierErrors = validatePendingSupplier(pendingCreate.supplier);
-        if (supplierErrors.length > 0) {
-          rowErrors.push(...supplierErrors.map(e => `供应商：${e}`));
+      let supplierId = row._supplierId || '';
+      if (pendingCreate.supplier && supplierId.startsWith('temp-supplier-')) {
+        const supplierName = pendingCreate.supplier.name;
+        if (supplierNameToId[supplierName]) {
+          supplierId = supplierNameToId[supplierName];
+        } else if (!createdSuppliers.some(s => s.name === supplierName)) {
+          const newSupplier = createSupplierFromImport(db, pendingCreate.supplier, operator, now);
+          supplierId = newSupplier.id;
+          supplierNameToId[supplierName] = newSupplier.id;
+          createdSuppliers.push(newSupplier);
         } else {
-          const supplierName = pendingCreate.supplier.name;
-          if (supplierNameToId[supplierName]) {
-            supplierId = supplierNameToId[supplierName];
-          } else {
-            if (!supplierNameToId[supplierName] && !createdSuppliers.some(s => s.name === supplierName)) {
-              const newSupplier = createSupplierFromImport(db, pendingCreate.supplier, operator, now);
-              supplierId = newSupplier.id;
-              supplierNameToId[supplierName] = newSupplier.id;
-              createdSuppliers.push(newSupplier);
-            } else {
-              supplierId = supplierNameToId[supplierName] || createdSuppliers.find(s => s.name === supplierName)?.id || '';
-            }
-          }
+          supplierId = createdSuppliers.find(s => s.name === supplierName)?.id || '';
         }
       }
 
-      let cabinetId = rowData.cabinetId || '';
-      if (pendingCreate.cabinet && !cabinetId) {
-        const cabinetErrors = validatePendingCabinet(pendingCreate.cabinet);
-        if (cabinetErrors.length > 0) {
-          rowErrors.push(...cabinetErrors.map(e => `柜位：${e}`));
+      let cabinetId = row._cabinetId || '';
+      if (pendingCreate.cabinet && cabinetId.startsWith('temp-cabinet-')) {
+        const cabinetCode = pendingCreate.cabinet.code;
+        if (cabinetCodeToId[cabinetCode]) {
+          cabinetId = cabinetCodeToId[cabinetCode];
+        } else if (!createdCabinets.some(c => c.code === cabinetCode)) {
+          const newCabinet = createCabinetFromImport(db, pendingCreate.cabinet, operator, now);
+          cabinetId = newCabinet.id;
+          cabinetCodeToId[cabinetCode] = newCabinet.id;
+          createdCabinets.push(newCabinet);
         } else {
-          const cabinetCode = pendingCreate.cabinet.code;
-          if (cabinetCodeToId[cabinetCode]) {
-            cabinetId = cabinetCodeToId[cabinetCode];
-          } else {
-            if (!cabinetCodeToId[cabinetCode] && !createdCabinets.some(c => c.code === cabinetCode)) {
-              const newCabinet = createCabinetFromImport(db, pendingCreate.cabinet, operator, now);
-              cabinetId = newCabinet.id;
-              cabinetCodeToId[cabinetCode] = newCabinet.id;
-              createdCabinets.push(newCabinet);
-            } else {
-              cabinetId = cabinetCodeToId[cabinetCode] || createdCabinets.find(c => c.code === cabinetCode)?.id || '';
-            }
-          }
+          cabinetId = createdCabinets.find(c => c.code === cabinetCode)?.id || '';
         }
       }
 
-      if (rowErrors.length > 0) {
-        failed.push({ batchNo, errors: rowErrors });
-        continue;
-      }
-
-      const addQty = Number(rowData.quantity || 0);
-      if (cabinetId) {
-        const capCheck = checkCabinetCapacity(db, cabinetId, addQty);
-        if (!capCheck.ok) {
-          failed.push({ batchNo, error: capCheck.error });
-          continue;
-        }
-      }
-
+      const addQty = row._addQty;
       const item = {
         id: `batches-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
         name: rowData.name,
@@ -1561,7 +1666,7 @@ app.post('/api/batches/import-confirm', requireUser, async (req, res) => {
         createdAt: now,
         updatedAt: now,
         createdBy: { id: operator.id, name: operator.name, role: operator.role, roleLabel: operator.roleLabel },
-        history: [stamp('批量导入', `导入${addQty}${rowData.unit || '罐'}${createdSuppliers.length || createdCabinets.length ? '，自动创建关联供应商/柜位' : ''}`, operator)]
+        history: [stamp('批量导入', `导入${addQty}${rowData.unit || '罐'}${pendingCreate.supplier || pendingCreate.cabinet ? '，自动创建关联供应商/柜位' : ''}`, operator)]
       };
 
       db.batches.push(item);
