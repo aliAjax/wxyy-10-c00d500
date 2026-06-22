@@ -206,10 +206,22 @@
       "unit": "发",
       "expiresAt": "2027-04-15",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-05-20T10:00:00.000Z",
-      "updatedAt": "2026-05-20T10:00:00.000Z",
+      "updatedAt": "2026-06-22T05:33:53.412Z",
       "history": [
+        {
+          "at": "2026-06-22T05:33:53.412Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "system",
+            "name": "系统",
+            "role": "system",
+            "roleLabel": "系统"
+          },
+          "operatorLabel": "系统（系统）"
+        },
         {
           "at": "2026-05-20T10:00:00.000Z",
           "action": "创建",
@@ -229,10 +241,22 @@
       "unit": "支",
       "expiresAt": "2027-01-20",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-05-25T14:00:00.000Z",
-      "updatedAt": "2026-06-20T07:35:10.519Z",
+      "updatedAt": "2026-06-22T05:33:53.412Z",
       "history": [
+        {
+          "at": "2026-06-22T05:33:53.412Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "system",
+            "name": "系统",
+            "role": "system",
+            "roleLabel": "系统"
+          },
+          "operatorLabel": "系统（系统）"
+        },
         {
           "at": "2026-06-20T07:35:10.519Z",
           "action": "盘点调整",
@@ -285,10 +309,22 @@
       "unit": "根",
       "expiresAt": "2026-11-30",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-05-01T11:00:00.000Z",
-      "updatedAt": "2026-06-20T07:35:10.519Z",
+      "updatedAt": "2026-06-22T05:33:53.412Z",
       "history": [
+        {
+          "at": "2026-06-22T05:33:53.412Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "system",
+            "name": "系统",
+            "role": "system",
+            "roleLabel": "系统"
+          },
+          "operatorLabel": "系统（系统）"
+        },
         {
           "at": "2026-06-20T07:35:10.519Z",
           "action": "盘点调整",
@@ -346,10 +382,22 @@
       "unit": "支",
       "expiresAt": "2026-05-20",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2025-08-15T09:00:00.000Z",
-      "updatedAt": "2026-06-20T09:09:42.087Z",
+      "updatedAt": "2026-06-22T05:33:53.412Z",
       "history": [
+        {
+          "at": "2026-06-22T05:33:53.412Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "system",
+            "name": "系统",
+            "role": "system",
+            "roleLabel": "系统"
+          },
+          "operatorLabel": "系统（系统）"
+        },
         {
           "at": "2026-06-20T09:09:42.087Z",
           "action": "报废扣减",
@@ -447,9 +495,9 @@
       "quantity": 5,
       "unit": "罐",
       "expiresAt": "2027-12-31",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-06-21T06:13:44.554Z",
-      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-22T05:33:53.412Z",
       "createdBy": {
         "id": "user-staff-1",
         "name": "张伟",
@@ -457,6 +505,18 @@
         "roleLabel": "库管员"
       },
       "history": [
+        {
+          "at": "2026-06-22T05:33:53.412Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "system",
+            "name": "系统",
+            "role": "system",
+            "roleLabel": "系统"
+          },
+          "operatorLabel": "系统（系统）"
+        },
         {
           "at": "2026-06-21T06:13:44.554Z",
           "action": "批量导入",
@@ -517,9 +577,9 @@
       "quantity": 4,
       "unit": "发",
       "expiresAt": "2027-03-15",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-06-21T06:13:44.554Z",
-      "updatedAt": "2026-06-21T06:13:44.554Z",
+      "updatedAt": "2026-06-22T05:33:53.412Z",
       "createdBy": {
         "id": "user-staff-1",
         "name": "张伟",
@@ -527,6 +587,18 @@
         "roleLabel": "库管员"
       },
       "history": [
+        {
+          "at": "2026-06-22T05:33:53.412Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "system",
+            "name": "系统",
+            "role": "system",
+            "roleLabel": "系统"
+          },
+          "operatorLabel": "系统（系统）"
+        },
         {
           "at": "2026-06-21T06:13:44.555Z",
           "action": "批量导入",

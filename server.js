@@ -486,9 +486,6 @@ app.get('/api/transactions/related/:type/:id', async (req, res) => {
 });
 
 app.post('/api/:collection', requireUser, async (req, res, next) => {
-  // #region debug-point H1:generic-post-entry
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.js:488',msg:'[DEBUG] POST /api/:collection entry',data:{collection:req.params.collection,bodyKeys:Object.keys(req.body||{}),hasValidateRules:false,note:'Generic write endpoint - NO validateRules() called yet'},ts:Date.now()}))})();
-  // #endregion
   const { collection } = req.params;
   if (collection === 'schedules') return next();
   const db = await readDb();
@@ -789,10 +786,15 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
     }
   }
 
-  Object.assign(item, req.body, { updatedAt: new Date().toISOString() });
+  const nowStr = new Date().toISOString();
+  Object.assign(item, req.body, { updatedAt: nowStr });
   item.history = item.history || [];
   if (historyAction || req.body.note || req.body.memo || req.body.status) {
     item.history.unshift(stamp(historyAction || req.body.status || '更新', req.body.note || req.body.memo || '', operator));
+  }
+  let supplierLockResult = null;
+  if (collection === 'suppliers' && isSupplierCertExpired(item)) {
+    supplierLockResult = lockBatchesForExpiredSuppliers(db, [item.id], operator, nowStr);
   }
   const trackedFields = ['status', 'quantity', 'note', 'memo', 'name', 'code', 'title'];
   writeAuditLog(db, {
@@ -805,6 +807,16 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
     note: req.body.note || req.body.memo || '',
     operator
   });
+  if (supplierLockResult?.lockedCount > 0) {
+    writeAuditLog(db, {
+      actionType: '规则拦截',
+      collection: 'batches',
+      targetId: item.id,
+      targetItem: item,
+      note: `供应商资质过期，已自动锁定${supplierLockResult.lockedCount}个关联批次`,
+      operator
+    });
+  }
   await writeDb(db);
   res.json(item);
 });
@@ -882,6 +894,12 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
   const result = runAction(db, action, item, operator);
   if (result.error) return res.status(409).json({ error: result.error });
 
+  const actionNow = new Date().toISOString();
+  let supplierActionLockResult = null;
+  if (action.collection === 'suppliers' && isSupplierCertExpired(item)) {
+    supplierActionLockResult = lockBatchesForExpiredSuppliers(db, [item.id], operator, actionNow);
+  }
+
   let extraBatchSnapshots = {};
   if (action.id === 'schedule-reject' && action.collection === 'schedules') {
     const nowStr = new Date().toISOString();
@@ -902,6 +920,17 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
     note: action.note || '状态流转',
     operator
   });
+
+  if (supplierActionLockResult?.lockedCount > 0) {
+    writeAuditLog(db, {
+      actionType: '规则拦截',
+      collection: 'batches',
+      targetId: item.id,
+      targetItem: item,
+      note: `供应商资质过期，已自动锁定${supplierActionLockResult.lockedCount}个关联批次`,
+      operator
+    });
+  }
 
   Object.entries(extraBatchSnapshots).forEach(([batchId, beforeBatch]) => {
     const batch = db.batches.find((b) => b.id === batchId);
@@ -2678,24 +2707,10 @@ function checkRuleCabinetDisabled(db, cabinetId) {
 }
 
 function checkRuleSupplierExpired(db, batch) {
-  // #region debug-point H4:checkSupplier-entry
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}const supid=batch?.supplierId;const sup=db?.suppliers?.find((s)=>s.id===supid);require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H4',location:'server.js:2614',msg:'[DEBUG] checkRuleSupplierExpired entry',data:{batchId:batch?.id,supplierId:supid,supplierName:sup?.name,supplierCertExpiry:sup?.certExpiresAt,supplierStatus:sup?.status,today:new Date().toISOString().slice(0,10)},ts:Date.now()}))})();
-  // #endregion
   if (!batch || !batch.supplierId) return null;
   const supplier = db.suppliers?.find((s) => s.id === batch.supplierId);
   if (!supplier) return null;
-  const now = new Date();
-  let isExpired = supplier.status === '资质过期';
-  if (!isExpired && supplier.certExpiresAt) {
-    const certDate = new Date(supplier.certExpiresAt);
-    if (certDate < now) {
-      isExpired = true;
-    }
-  }
-  // #region debug-point H4:checkSupplier-comparison
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H4',location:'server.js:2625',msg:'[DEBUG] checkRuleSupplierExpired comparison',data:{isExpired,statusCheck:supplier.status==='资质过期',certExpiresAt:supplier.certExpiresAt,certDateMs:supplier.certExpiresAt?new Date(supplier.certExpiresAt).getTime():null,nowMs:now.getTime(),comparison:supplier.certExpiresAt?new Date(supplier.certExpiresAt)<now:null,returnsLock:false,note:'Return object does NOT include lockBatch flag'},ts:Date.now()}))})();
-  // #endregion
-  if (isExpired) {
+  if (isSupplierCertExpired(supplier)) {
     return {
       supplierId: supplier.id,
       supplierName: supplier.name,
@@ -2707,6 +2722,32 @@ function checkRuleSupplierExpired(db, batch) {
     };
   }
   return null;
+}
+
+function isSupplierCertExpired(supplier, now = new Date()) {
+  if (!supplier) return false;
+  if (supplier.status === '资质过期') return true;
+  if (!supplier.certExpiresAt) return false;
+  const certDate = new Date(supplier.certExpiresAt);
+  return !Number.isNaN(certDate.getTime()) && certDate < now;
+}
+
+function lockBatchesForExpiredSuppliers(db, supplierIds, operator, now = new Date().toISOString()) {
+  const ids = new Set((supplierIds || []).filter(Boolean));
+  const locked = [];
+  if (!ids.size || !Array.isArray(db.batches)) return { locked, lockedCount: 0 };
+
+  for (const batch of db.batches) {
+    if (!ids.has(batch.supplierId)) continue;
+    if (batch.status === '锁定' || batch.status === '已报废') continue;
+    batch.status = '锁定';
+    batch.updatedAt = now;
+    batch.history = batch.history || [];
+    batch.history.unshift(stamp('系统锁定', '供应商资质过期，批次自动锁定', operator || { id: 'system', name: '系统', role: 'system' }));
+    locked.push(batch);
+  }
+
+  return { locked, lockedCount: locked.length };
 }
 
 function checkRuleTimeSpraypointConflict(db, projectId, useWindow, sprayPoint, excludeScheduleId = null, excludeRequestId = null) {
@@ -2957,9 +2998,6 @@ function evaluateRulesForBatchImport(db, scenario, rowData, options = {}) {
 }
 
 function validateRules(db, scenario, contextData, options = {}) {
-  // #region debug-point H1:validateRules-entry
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.js:2888',msg:'[DEBUG] validateRules entry',data:{scenario,entityType:options.entityType,entityId:options.entity?.id,operatorId:options.operator?.id},ts:Date.now()}))})();
-  // #endregion
   const { entityType, entity, operator } = options;
   let violations = [];
   let dbModified = false;
@@ -2988,50 +3026,30 @@ function validateRules(db, scenario, contextData, options = {}) {
   }
 
   const supplierViolations = violations.filter((v) => v.ruleId === 'supplier-expired-batch-locked');
-  if (supplierViolations.length > 0 && entityType === 'batch' && entity && entity.id) {
-    const batch = db.batches?.find((b) => b.id === entity.id);
-    if (batch && batch.status !== '锁定' && batch.status !== '已报废') {
-      const oldStatus = batch.status;
-      batch.status = '锁定';
-      batch.updatedAt = new Date().toISOString();
-      batch.history = batch.history || [];
-      batch.history.unshift(stamp('系统锁定', `供应商资质过期，批次自动锁定`, operator || { id: 'system', name: '系统', role: 'system' }));
+  if (supplierViolations.length > 0) {
+    const supplierIds = new Set();
+    supplierViolations.forEach((v) => {
+      if (v.context?.supplierId) supplierIds.add(v.context.supplierId);
+    });
+    const lockResult = lockBatchesForExpiredSuppliers(db, [...supplierIds], operator);
+    if (lockResult.lockedCount > 0) {
+      const lockedIds = new Set(lockResult.locked.map((batch) => batch.id));
       supplierViolations.forEach((v) => {
-        if (typeof v.context === 'object' && v.context !== null) {
+        const batchId = v.batchId || v.context?.batchId;
+        if (batchId && lockedIds.has(batchId) && typeof v.context === 'object' && v.context !== null) {
           v.context = { ...v.context, batchLocked: true, _note: '批次已自动锁定' };
-        } else if (typeof v.context === 'string') {
-          v.context = `${v.context}（批次已自动锁定）`;
+          v.contextText = buildContextText(v.context);
+          v.batchId = batchId;
         }
-        v.contextText = buildContextText(v.context);
-        v.batchId = v.batchId || v.context?.batchId || entity.id;
       });
       dbModified = true;
     }
-  }
-  if (supplierViolations.length > 0 && (entityType === 'schedule' || entityType === 'request' || entityType === 'stocktake')) {
-    const batchIds = new Set();
-    supplierViolations.forEach((v) => {
-      const bid = v.batchId || v.context?.batchId;
-      if (bid) batchIds.add(bid);
-    });
-    for (const bid of batchIds) {
-      const batch = db.batches?.find((b) => b.id === bid);
-      if (batch && batch.status !== '锁定' && batch.status !== '已报废') {
-        const oldStatus = batch.status;
-        batch.status = '锁定';
-        batch.updatedAt = new Date().toISOString();
-        batch.history = batch.history || [];
-        batch.history.unshift(stamp('系统锁定', `供应商资质过期，批次自动锁定`, operator || { id: 'system', name: '系统', role: 'system' }));
-        supplierViolations.forEach((v) => {
-          if ((v.batchId || v.context?.batchId) === bid) {
-            if (typeof v.context === 'object' && v.context !== null) {
-              v.context = { ...v.context, batchLocked: true, _note: '批次已自动锁定' };
-            }
-            v.contextText = buildContextText(v.context);
-            v.batchId = bid;
-          }
-        });
-        dbModified = true;
+    if (lockResult.lockedCount > 0 && !supplierViolations.some((v) => v.context?.batchLocked)) {
+      for (const v of supplierViolations) {
+        if (typeof v.context === 'object' && v.context !== null) {
+          v.context = { ...v.context, lockedBatchCount: lockResult.lockedCount, _note: '供应商关联批次已自动锁定' };
+          v.contextText = buildContextText(v.context);
+        }
       }
     }
   }
@@ -3058,20 +3076,14 @@ function validateRules(db, scenario, contextData, options = {}) {
 
   if (violations.length > 0 && operator) {
     writeRuleViolationAudit(db, result, operator, contextData);
+    result.dbModified = true;
     dbModified = true;
   }
-
-  // #region debug-point H1:validateRules-exit
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.js:2940',msg:'[DEBUG] validateRules exit',data:{valid:result.valid,hasBlocking:result.hasBlocking,totalViolations:result.totalViolations,blockingCount:result.blockingCount,warningCount:result.warningCount,dbModified},ts:Date.now()}))})();
-  // #endregion
 
   return result;
 }
 
 function writeRuleViolationAudit(db, validationResult, operator, contextData) {
-  // #region debug-point H2:writeAudit-entry
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H2',location:'server.js:2947',msg:'[DEBUG] writeRuleViolationAudit entry',data:{violationCount:validationResult.allViolations?.length,hasBlocking:validationResult.hasBlocking,operatorId:operator?.id,entityType:validationResult.entityType},ts:Date.now()}))})();
-  // #endregion
   if (!db[AUDIT_COLLECTION]) db[AUDIT_COLLECTION] = [];
   const actionType = validationResult.hasBlocking ? '规则拦截' : '规则警告';
   const violationSummary = validationResult.allViolations
@@ -3116,9 +3128,6 @@ function writeRuleViolationAudit(db, validationResult, operator, contextData) {
       resolutionNote: null
     });
   }
-  // #region debug-point H2:writeAudit-exit
-  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H2',location:'server.js:2995',msg:'[DEBUG] writeRuleViolationAudit exit',data:{auditCount:db[AUDIT_COLLECTION]?.length||0,ruleViolationCount:db[RULE_VIOLATION_COLLECTION]?.length||0,willPersist:false,note:'Function returns void, writeDb() not called'},ts:Date.now()}))})();
-  // #endregion
 }
 
 function getRiskAlertsSummary(db) {
