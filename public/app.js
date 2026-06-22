@@ -119,7 +119,7 @@ function renderViolationBanner(validationResult) {
     <ul class="violation-list">
       ${displayList.map(v => `<li class="violation-item">
         <span class="violation-rule-label">${escapeHtml(v.ruleLabel || v.ruleId)}</span>
-        <span class="violation-context">${escapeHtml(v.context || v.message || '')}</span>
+        <span class="violation-context">${escapeHtml(v.contextText || (typeof v.context === 'string' ? v.context : v.message || ''))}</span>
       </li>`).join('')}
     </ul>
     ${suggestions.length ? `<div class="rule-suggestion-panel">
@@ -799,7 +799,7 @@ function renderRiskAlertsView(view) {
               <div class="risk-alert-meta">
                 ${entityLabel ? `<span class="meta-label">关联对象：</span><span class="meta-value">${escapeHtml(entityLabel)}</span>　` : ''}
                 <span class="meta-label">场景：</span><span class="meta-value">${escapeHtml(v.scenario || '-')}</span>
-                ${v.context ? `<br><span class="meta-label">详情：</span><span class="meta-value">${escapeHtml(v.context)}</span>` : ''}
+                ${(v.contextText || v.context) ? `<br><span class="meta-label">详情：</span><span class="meta-value">${escapeHtml(v.contextText || (typeof v.context === 'string' ? v.context : ''))}</span>` : ''}
                 ${v.detectedAt ? `<br><span class="meta-label">检测时间：</span><span class="meta-value">${escapeHtml(fmtDate(v.detectedAt))}</span>` : ''}
                 ${v.suggestion ? `<br><span class="meta-label">💡 处理建议：</span><span class="meta-value" style="color:#1d4ed8;">${escapeHtml(v.suggestion)}</span>` : ''}
               </div>
@@ -3826,10 +3826,16 @@ document.addEventListener('change', (e) => {
 });
 
 function showRuleViolationsInForm(formEl, err) {
+  // #region debug-point H3:showFormViolations-entry
+  fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"compliance-rule-engine-fix",runId:"pre",hypothesisId:"H3",location:"app.js:3828",msg:"[DEBUG] showRuleViolationsInForm entry",data:{hasRuleValidation:!!err.ruleValidation,hasViolations:!!err.violations,errKeys:Object.keys(err),violationFields:err.violations?.map(v=>Object.keys(v).join(',')),ruleValidationStructure:err.ruleValidation?Object.keys(err.ruleValidation).join(','):null},ts:Date.now()})}).catch(()=>{});
+  // #endregion
   let validationResult = err.ruleValidation;
   if (!validationResult && err.violations) {
     validationResult = { allViolations: err.violations, blocking: err.violations.filter(v => ['critical', 'high'].includes(v.severity)), warnings: err.violations.filter(v => ['medium', 'low'].includes(v.severity)), totalViolations: err.violations.length, hasBlocking: err.violations.some(v => ['critical', 'high'].includes(v.severity)) };
   }
+  // #region debug-point H3:showFormViolations-result
+  fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"compliance-rule-engine-fix",runId:"pre",hypothesisId:"H3",location:"app.js:3833",msg:"[DEBUG] showRuleViolationsInForm result",data:{validationResultValid:!!(validationResult&&validationResult.allViolations&&validationResult.allViolations.length),violationCount:validationResult?.allViolations?.length,firstViolationFields:validationResult?.allViolations?.[0]?Object.keys(validationResult.allViolations[0]).join(','):null,firstViolation:validationResult?.allViolations?.[0]?{ruleId:validationResult.allViolations[0].ruleId,ruleLabel:validationResult.allViolations[0].ruleLabel,context:validationResult.allViolations[0].context,suggestion:validationResult.allViolations[0].suggestion}:null},ts:Date.now()})}).catch(()=>{});
+  // #endregion
   if (validationResult && validationResult.allViolations && validationResult.allViolations.length) {
     let bannerContainer = formEl.querySelector('.rule-violation-banner-container');
     if (!bannerContainer) {

@@ -486,6 +486,9 @@ app.get('/api/transactions/related/:type/:id', async (req, res) => {
 });
 
 app.post('/api/:collection', requireUser, async (req, res, next) => {
+  // #region debug-point H1:generic-post-entry
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.js:488',msg:'[DEBUG] POST /api/:collection entry',data:{collection:req.params.collection,bodyKeys:Object.keys(req.body||{}),hasValidateRules:false,note:'Generic write endpoint - NO validateRules() called yet'},ts:Date.now()}))})();
+  // #endregion
   const { collection } = req.params;
   if (collection === 'schedules') return next();
   const db = await readDb();
@@ -636,8 +639,9 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
     };
     const ruleResult = validateRules(db, 'requestCreate', item, { entityType: 'request', entity: item, operator });
     if (!ruleResult.valid) {
+      if (ruleResult.dbModified) await writeDb(db);
       const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.projectName || ''} ${v.suggestion}`).join('；');
-      return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+      return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
     }
   } else if (collection === 'batches') {
     const defaultNote = req.body.note || req.body.memo || '';
@@ -657,8 +661,9 @@ app.post('/api/:collection', requireUser, async (req, res, next) => {
     };
     const ruleResult = validateRules(db, 'batchCreate', item, { entityType: 'batch', entity: item, operator });
     if (!ruleResult.valid) {
+      if (ruleResult.dbModified) await writeDb(db);
       const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.cabinetCode || ''} ${v.suggestion}`).join('；');
-      return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+      return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
     }
     writeStockTransaction(db, {
       batchId: item.id,
@@ -767,6 +772,23 @@ app.patch('/api/:collection/:id', requireUser, async (req, res, next) => {
     }
   }
 
+  const mergedItem = { ...item, ...req.body };
+  let patchScenario = null;
+  let patchEntityType = null;
+  if (collection === 'batches') { patchScenario = 'batchCreate'; patchEntityType = 'batch'; }
+  else if (collection === 'requests') { patchScenario = 'requestCreate'; patchEntityType = 'request'; }
+  else if (collection === 'schedules') { patchScenario = 'scheduleCreate'; patchEntityType = 'schedule'; }
+  else if (collection === 'wastes') { patchScenario = 'wasteCreate'; patchEntityType = 'waste'; }
+
+  if (patchScenario && patchEntityType) {
+    const ruleResult = validateRules(db, patchScenario, mergedItem, { entityType: patchEntityType, entity: mergedItem, operator });
+    if (!ruleResult.valid) {
+      if (ruleResult.dbModified) await writeDb(db);
+      const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.suggestion}`).join('；');
+      return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
+    }
+  }
+
   Object.assign(item, req.body, { updatedAt: new Date().toISOString() });
   item.history = item.history || [];
   if (historyAction || req.body.note || req.body.memo || req.body.status) {
@@ -843,8 +865,9 @@ app.post('/api/action/:actionId/:id', requireUser, async (req, res) => {
   if (ruleScenario && ruleEntityType) {
     const ruleResult = validateRules(db, ruleScenario, item, { entityType: ruleEntityType, entity: item, operator });
     if (!ruleResult.valid) {
+      if (ruleResult.dbModified) { await writeDb(db); }
       const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.projectName || ''} ${v.suggestion}`).join('；');
-      return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+      return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
     }
   }
 
@@ -1293,8 +1316,9 @@ app.post('/api/stocktakes/:id/confirm', requireUser, async (req, res) => {
 
   const ruleResult = validateRules(db, 'stocktakeConfirm', stocktake, { entityType: 'stocktake', entity: stocktake, operator: req.currentUser });
   if (!ruleResult.valid) {
+    if (ruleResult.dbModified) { await writeDb(db); }
     const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.cabinetCode || v.context?.batchNo || ''} ${v.suggestion}`).join('；');
-    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
   }
 
   const operator = req.currentUser;
@@ -1437,7 +1461,12 @@ app.post('/api/wastes/:id/approve', requireUser, async (req, res) => {
   if (!waste) return res.status(404).json({ error: '报废单不存在' });
   if (waste.status !== '待审批') return res.status(409).json({ error: '只有待审批状态的报废单可以审批' });
 
-  validateRules(db, 'wasteApprove', waste, { entityType: 'waste', entity: waste, operator: req.currentUser });
+  const ruleResult = validateRules(db, 'wasteApprove', waste, { entityType: 'waste', entity: waste, operator: req.currentUser });
+  if (!ruleResult.valid) {
+    if (ruleResult.dbModified) { await writeDb(db); }
+    const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}：${v.context?.batchNo || v.context?.projectName || ''} ${v.suggestion}`).join('；');
+    return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
+  }
 
   const batch = db.batches.find((b) => b.id === waste.batchId);
   if (!batch) return res.status(409).json({ error: '关联批次不存在' });
@@ -2545,6 +2574,42 @@ const LEVEL_RANK = { '低': 1, '中': 2, '高': 3 };
 
 const RULE_VIOLATION_COLLECTION = 'ruleViolations';
 
+function buildContextText(context) {
+  if (typeof context === 'string') return context;
+  if (!context || typeof context !== 'object') return '';
+  const parts = [];
+  const fieldMap = {
+    batchNo: '批次号',
+    batchName: '批次名称',
+    batchId: '批次ID',
+    supplierName: '供应商',
+    supplierStatus: '供应商状态',
+    certExpiresAt: '资质过期日',
+    cabinetCode: '柜位',
+    cabinetStatus: '柜位状态',
+    projectName: '演出项目',
+    safetyLevel: '安全等级',
+    batchSafetyLevel: '批次安全等级',
+    projectSafetyLevel: '演出安全等级',
+    sprayPoint: '喷点',
+    useWindow: '时段',
+    conflictCount: '冲突数',
+    daysExpired: '已过期天数',
+    expiresAt: '有效期',
+    lineNo: '行号',
+    locked: '是否锁定'
+  };
+  for (const [key, value] of Object.entries(context)) {
+    if (key.startsWith('_')) continue;
+    const label = fieldMap[key] || key;
+    if (value !== undefined && value !== null && value !== '') {
+      parts.push(`${label}：${value}`);
+    }
+  }
+  if (context._note) parts.push(context._note);
+  return parts.join('，');
+}
+
 function buildRuleViolation(rule, context, extra = {}) {
   const severityInfo = config.complianceRules?.severityLevels?.[rule.severity] || { label: rule.severity, tone: 'warn', order: 99 };
   return {
@@ -2557,6 +2622,7 @@ function buildRuleViolation(rule, context, extra = {}) {
     severityOrder: severityInfo.order,
     suggestion: rule.suggestion,
     context,
+    contextText: buildContextText(context),
     ...extra,
     detectedAt: new Date().toISOString()
   };
@@ -2612,6 +2678,9 @@ function checkRuleCabinetDisabled(db, cabinetId) {
 }
 
 function checkRuleSupplierExpired(db, batch) {
+  // #region debug-point H4:checkSupplier-entry
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}const supid=batch?.supplierId;const sup=db?.suppliers?.find((s)=>s.id===supid);require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H4',location:'server.js:2614',msg:'[DEBUG] checkRuleSupplierExpired entry',data:{batchId:batch?.id,supplierId:supid,supplierName:sup?.name,supplierCertExpiry:sup?.certExpiresAt,supplierStatus:sup?.status,today:new Date().toISOString().slice(0,10)},ts:Date.now()}))})();
+  // #endregion
   if (!batch || !batch.supplierId) return null;
   const supplier = db.suppliers?.find((s) => s.id === batch.supplierId);
   if (!supplier) return null;
@@ -2623,6 +2692,9 @@ function checkRuleSupplierExpired(db, batch) {
       isExpired = true;
     }
   }
+  // #region debug-point H4:checkSupplier-comparison
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H4',location:'server.js:2625',msg:'[DEBUG] checkRuleSupplierExpired comparison',data:{isExpired,statusCheck:supplier.status==='资质过期',certExpiresAt:supplier.certExpiresAt,certDateMs:supplier.certExpiresAt?new Date(supplier.certExpiresAt).getTime():null,nowMs:now.getTime(),comparison:supplier.certExpiresAt?new Date(supplier.certExpiresAt)<now:null,returnsLock:false,note:'Return object does NOT include lockBatch flag'},ts:Date.now()}))})();
+  // #endregion
   if (isExpired) {
     return {
       supplierId: supplier.id,
@@ -2885,8 +2957,12 @@ function evaluateRulesForBatchImport(db, scenario, rowData, options = {}) {
 }
 
 function validateRules(db, scenario, contextData, options = {}) {
+  // #region debug-point H1:validateRules-entry
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.js:2888',msg:'[DEBUG] validateRules entry',data:{scenario,entityType:options.entityType,entityId:options.entity?.id,operatorId:options.operator?.id},ts:Date.now()}))})();
+  // #endregion
   const { entityType, entity, operator } = options;
   let violations = [];
+  let dbModified = false;
 
   switch (entityType) {
     case 'batch':
@@ -2911,6 +2987,55 @@ function validateRules(db, scenario, contextData, options = {}) {
       break;
   }
 
+  const supplierViolations = violations.filter((v) => v.ruleId === 'supplier-expired-batch-locked');
+  if (supplierViolations.length > 0 && entityType === 'batch' && entity && entity.id) {
+    const batch = db.batches?.find((b) => b.id === entity.id);
+    if (batch && batch.status !== '锁定' && batch.status !== '已报废') {
+      const oldStatus = batch.status;
+      batch.status = '锁定';
+      batch.updatedAt = new Date().toISOString();
+      batch.history = batch.history || [];
+      batch.history.unshift(stamp('系统锁定', `供应商资质过期，批次自动锁定`, operator || { id: 'system', name: '系统', role: 'system' }));
+      supplierViolations.forEach((v) => {
+        if (typeof v.context === 'object' && v.context !== null) {
+          v.context = { ...v.context, batchLocked: true, _note: '批次已自动锁定' };
+        } else if (typeof v.context === 'string') {
+          v.context = `${v.context}（批次已自动锁定）`;
+        }
+        v.contextText = buildContextText(v.context);
+        v.batchId = v.batchId || v.context?.batchId || entity.id;
+      });
+      dbModified = true;
+    }
+  }
+  if (supplierViolations.length > 0 && (entityType === 'schedule' || entityType === 'request' || entityType === 'stocktake')) {
+    const batchIds = new Set();
+    supplierViolations.forEach((v) => {
+      const bid = v.batchId || v.context?.batchId;
+      if (bid) batchIds.add(bid);
+    });
+    for (const bid of batchIds) {
+      const batch = db.batches?.find((b) => b.id === bid);
+      if (batch && batch.status !== '锁定' && batch.status !== '已报废') {
+        const oldStatus = batch.status;
+        batch.status = '锁定';
+        batch.updatedAt = new Date().toISOString();
+        batch.history = batch.history || [];
+        batch.history.unshift(stamp('系统锁定', `供应商资质过期，批次自动锁定`, operator || { id: 'system', name: '系统', role: 'system' }));
+        supplierViolations.forEach((v) => {
+          if ((v.batchId || v.context?.batchId) === bid) {
+            if (typeof v.context === 'object' && v.context !== null) {
+              v.context = { ...v.context, batchLocked: true, _note: '批次已自动锁定' };
+            }
+            v.contextText = buildContextText(v.context);
+            v.batchId = bid;
+          }
+        });
+        dbModified = true;
+      }
+    }
+  }
+
   const blocking = violations.filter((v) => v.severity === 'critical' || v.severity === 'high');
   const warnings = violations.filter((v) => v.severity === 'medium' || v.severity === 'low');
   const hasBlocking = blocking.length > 0;
@@ -2927,17 +3052,26 @@ function validateRules(db, scenario, contextData, options = {}) {
     allViolations: violations.sort((a, b) => a.severityOrder - b.severityOrder),
     scenario,
     entityType,
+    dbModified,
     evaluatedAt: new Date().toISOString()
   };
 
   if (violations.length > 0 && operator) {
     writeRuleViolationAudit(db, result, operator, contextData);
+    dbModified = true;
   }
+
+  // #region debug-point H1:validateRules-exit
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H1',location:'server.js:2940',msg:'[DEBUG] validateRules exit',data:{valid:result.valid,hasBlocking:result.hasBlocking,totalViolations:result.totalViolations,blockingCount:result.blockingCount,warningCount:result.warningCount,dbModified},ts:Date.now()}))})();
+  // #endregion
 
   return result;
 }
 
 function writeRuleViolationAudit(db, validationResult, operator, contextData) {
+  // #region debug-point H2:writeAudit-entry
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H2',location:'server.js:2947',msg:'[DEBUG] writeRuleViolationAudit entry',data:{violationCount:validationResult.allViolations?.length,hasBlocking:validationResult.hasBlocking,operatorId:operator?.id,entityType:validationResult.entityType},ts:Date.now()}))})();
+  // #endregion
   if (!db[AUDIT_COLLECTION]) db[AUDIT_COLLECTION] = [];
   const actionType = validationResult.hasBlocking ? '规则拦截' : '规则警告';
   const violationSummary = validationResult.allViolations
@@ -2982,6 +3116,9 @@ function writeRuleViolationAudit(db, validationResult, operator, contextData) {
       resolutionNote: null
     });
   }
+  // #region debug-point H2:writeAudit-exit
+  (()=>{const fs=require('fs'),p='/Users/hutu/Desktop/wxyy   solo  code/wxyy-10/.dbg/compliance-rule-engine-fix.env';let u='http://127.0.0.1:7777/event',s='compliance-rule-engine-fix';try{const e=fs.readFileSync(p,'utf8');u=e.match(/DEBUG_SERVER_URL=(.+)/)?.[1]||u;s=e.match(/DEBUG_SESSION_ID=(.+)/)?.[1]||s}catch{}require('http').request(u,{method:'POST',headers:{'Content-Type':'application/json'}},()=>{}).end(JSON.stringify({sessionId:s,runId:'pre',hypothesisId:'H2',location:'server.js:2995',msg:'[DEBUG] writeRuleViolationAudit exit',data:{auditCount:db[AUDIT_COLLECTION]?.length||0,ruleViolationCount:db[RULE_VIOLATION_COLLECTION]?.length||0,willPersist:false,note:'Function returns void, writeDb() not called'},ts:Date.now()}))})();
+  // #endregion
 }
 
 function getRiskAlertsSummary(db) {
@@ -3342,8 +3479,9 @@ app.post('/api/schedules', requireUser, async (req, res) => {
 
   const ruleResult = validateRules(db, 'scheduleCreate', schedule, { entityType: 'schedule', entity: schedule, operator: op });
   if (!ruleResult.valid) {
+    if (ruleResult.dbModified) { await writeDb(db); }
     const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}${v.context?.lineNo ? `(第${v.context.lineNo}行)` : ''}：${v.context?.batchNo || v.context?.sprayPoint || v.context?.projectName || ''} ${v.suggestion}`).join('；');
-    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
   }
 
   db.schedules.push(schedule);
@@ -3370,8 +3508,9 @@ app.post('/api/schedules/:id/approve', requireUser, async (req, res) => {
 
   const ruleResult = validateRules(db, 'scheduleApprove', schedule, { entityType: 'schedule', entity: schedule, operator: req.currentUser });
   if (!ruleResult.valid) {
+    if (ruleResult.dbModified) { await writeDb(db); }
     const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}${v.context?.lineNo ? `(第${v.context.lineNo}行)` : ''}：${v.context?.batchNo || v.context?.sprayPoint || v.context?.projectName || ''} ${v.suggestion}`).join('；');
-    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
   }
 
   const now = new Date();
@@ -3451,8 +3590,9 @@ app.post('/api/schedules/:id/issue', requireUser, async (req, res) => {
 
   const ruleResult = validateRules(db, 'batchIssue', schedule, { entityType: 'schedule', entity: schedule, operator: req.currentUser });
   if (!ruleResult.valid) {
+    if (ruleResult.dbModified) { await writeDb(db); }
     const errorMsg = ruleResult.blocking.map((v) => `[${v.severityLabel}] ${v.ruleLabel}${v.context?.lineNo ? `(第${v.context.lineNo}行)` : ''}：${v.context?.batchNo || v.context?.sprayPoint || ''} ${v.suggestion}`).join('；');
-    return res.status(409).json({ error: errorMsg, ruleViolations: ruleResult });
+    return res.status(409).json({ error: errorMsg, ruleValidation: ruleResult, violations: ruleResult.allViolations });
   }
 
   const now = new Date();

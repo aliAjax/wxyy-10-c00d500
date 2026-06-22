@@ -40,10 +40,22 @@
       "area": "A区危险品库房",
       "capacity": 40,
       "manager": "王芳",
-      "status": "已满",
+      "status": "停用",
       "createdAt": "2026-05-15T10:00:00.000Z",
-      "updatedAt": "2026-05-15T10:00:00.000Z",
+      "updatedAt": "2026-06-22T04:14:06.317Z",
       "history": [
+        {
+          "at": "2026-06-22T04:14:06.317Z",
+          "action": "停用",
+          "note": "",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
         {
           "at": "2026-05-15T10:00:00.000Z",
           "action": "创建",
@@ -154,10 +166,22 @@
       "unit": "罐",
       "expiresAt": "2026-10-30",
       "supplierId": "supplier-seed-1",
-      "status": "可用",
+      "status": "锁定",
       "createdAt": "2026-06-16T09:00:00.000Z",
-      "updatedAt": "2026-06-20T10:18:28.118Z",
+      "updatedAt": "2026-06-22T05:13:56.280Z",
       "history": [
+        {
+          "at": "2026-06-22T05:13:56.280Z",
+          "action": "系统锁定",
+          "note": "供应商资质过期，批次自动锁定",
+          "operator": {
+            "id": "user-show-1",
+            "name": "王芳",
+            "role": "show",
+            "roleLabel": "演出负责人"
+          },
+          "operatorLabel": "王芳（演出负责人）"
+        },
         {
           "at": "2026-06-20T10:18:28.118Z",
           "action": "出库",
@@ -685,11 +709,23 @@
       "phone": "138-0013-8000",
       "category": "冷焰火",
       "riskLevel": "中",
-      "certExpiresAt": "2027-03-15",
-      "status": "合作中",
+      "certExpiresAt": "2025-06-01",
+      "status": "资质过期",
       "createdAt": "2026-05-20T08:00:00.000Z",
-      "updatedAt": "2026-05-20T08:00:00.000Z",
+      "updatedAt": "2026-06-22T05:09:58.728Z",
       "history": [
+        {
+          "at": "2026-06-22T05:09:58.728Z",
+          "action": "资质过期",
+          "note": "",
+          "operator": {
+            "id": "user-staff-1",
+            "name": "张伟",
+            "role": "librarian",
+            "roleLabel": "库管员"
+          },
+          "operatorLabel": "张伟（库管员）"
+        },
         {
           "at": "2026-05-20T08:00:00.000Z",
           "action": "创建",
@@ -1059,6 +1095,92 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "auditLogs-1782105236280-f3aeb",
+      "actionType": "规则拦截",
+      "targetCollection": "request",
+      "targetId": "requests-1782105236279-1421d",
+      "targetLabel": "requestCreate 规则校验",
+      "changes": {
+        "scenario": "requestCreate",
+        "blockingCount": 1,
+        "warningCount": 0,
+        "violations": [
+          {
+            "ruleId": "supplier-expired-batch-locked",
+            "ruleLabel": "供应商资质过期批次需锁定",
+            "severity": "high",
+            "context": {
+              "supplierId": "supplier-seed-1",
+              "supplierName": "华光烟火科技",
+              "supplierStatus": "资质过期",
+              "certExpiresAt": "2025-06-01",
+              "batchId": "batch-seed-1",
+              "batchName": "冷焰火粉A17",
+              "batchNo": "PY-A17-2605",
+              "batchLocked": true,
+              "_note": "批次已自动锁定"
+            }
+          }
+        ]
+      },
+      "note": "命中 1 条规则：[高风险] 供应商资质过期批次需锁定",
+      "operator": "王芳（演出负责人）",
+      "operatorInfo": {
+        "id": "user-show-1",
+        "username": "show",
+        "name": "王芳",
+        "role": "show",
+        "roleLabel": "演出负责人"
+      },
+      "createdAt": "2026-06-22T05:13:56.280Z"
+    },
+    {
+      "id": "auditLogs-1782104998728-2390a",
+      "actionType": "更新",
+      "targetCollection": "suppliers",
+      "targetId": "supplier-seed-1",
+      "targetLabel": "华光烟火科技",
+      "changes": {
+        "status": {
+          "before": "合作中",
+          "after": "资质过期"
+        }
+      },
+      "note": "",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-22T05:09:58.728Z"
+    },
+    {
+      "id": "auditLogs-1782101646317-2e8a7",
+      "actionType": "更新",
+      "targetCollection": "cabinets",
+      "targetId": "cabinet-seed-3",
+      "targetLabel": "防爆柜A-3 / A区危险品库房",
+      "changes": {
+        "status": {
+          "before": "已满",
+          "after": "停用"
+        }
+      },
+      "note": "",
+      "operator": "张伟（库管员）",
+      "operatorInfo": {
+        "id": "user-staff-1",
+        "username": "librarian",
+        "name": "张伟",
+        "role": "librarian",
+        "roleLabel": "库管员"
+      },
+      "createdAt": "2026-06-22T04:14:06.317Z"
+    },
     {
       "id": "auditLogs-1782036643402-32432",
       "actionType": "规则警告",
@@ -2816,6 +2938,43 @@
     }
   ],
   "ruleViolations": [
+    {
+      "id": "ruleViolations-1782105236280-38fe9",
+      "ruleId": "supplier-expired-batch-locked",
+      "ruleLabel": "供应商资质过期批次需锁定",
+      "description": "当供应商资质过期时，该供应商的所有在库批次应自动标记为锁定状态",
+      "severity": "high",
+      "severityLabel": "高风险",
+      "severityTone": "bad",
+      "severityOrder": 2,
+      "suggestion": "请先更新供应商资质并将其状态恢复为「合作中」，或更换其他合格供应商的批次",
+      "context": {
+        "supplierId": "supplier-seed-1",
+        "supplierName": "华光烟火科技",
+        "supplierStatus": "资质过期",
+        "certExpiresAt": "2025-06-01",
+        "batchId": "batch-seed-1",
+        "batchName": "冷焰火粉A17",
+        "batchNo": "PY-A17-2605",
+        "batchLocked": true,
+        "_note": "批次已自动锁定"
+      },
+      "contextText": "supplierId：supplier-seed-1，供应商：华光烟火科技，供应商状态：资质过期，资质过期日：2025-06-01，批次ID：batch-seed-1，批次名称：冷焰火粉A17，批次号：PY-A17-2605，batchLocked：true，批次已自动锁定",
+      "checkType": "supplierCert",
+      "detectedAt": "2026-06-22T05:13:56.280Z",
+      "batchId": "batch-seed-1",
+      "scenario": "requestCreate",
+      "entityType": "request",
+      "operator": {
+        "id": "user-show-1",
+        "name": "王芳",
+        "role": "show"
+      },
+      "resolved": false,
+      "resolvedAt": null,
+      "resolvedBy": null,
+      "resolutionNote": null
+    },
     {
       "id": "rv-expired-demo-001",
       "ruleId": "expired-batch-no-issue",
